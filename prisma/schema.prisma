@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int          @id @default(autoincrement())
+  username  String       @unique
+  password  String
+  fullName  String
+  email     String?      @unique
+  level     UserLevel    @default(STUDENT)
+  levelInt  Int          @default(1)
+  groupId   Int?
+  notes     String?      @db.Text
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  results   ExamResult[]
+  sessions  Session[]
+  group     Group?       @relation(fields: [groupId], references: [id])
+
+  @@index([groupId], map: "users_groupId_fkey")
+  @@map("users")
+}
+
+model Group {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  users User[]
+  exams Exam[] @relation("examgroups")
+
+  @@map("groups")
+}
+
+model Module {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?   @db.Text
+  enabled     Boolean   @default(true)
+  subjects    Subject[]
+
+  @@map("modules")
+}
+
+model Subject {
+  id          Int             @id @default(autoincrement())
+  moduleId    Int
+  name        String
+  description String?         @db.Text
+  enabled     Boolean         @default(true)
+  questions   Question[]
+  module      Module          @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  topicRules  TestTopicRule[]
+
+  @@index([moduleId], map: "subjects_moduleId_fkey")
+  @@map("subjects")
+}
+
+model Question {
+  id          Int          @id @default(autoincrement())
+  subjectId   Int
+  type        QuestionType @default(MCSA)
+  content     String       @db.LongText
+  explanation String?      @db.Text
+  difficulty  Int          @default(1)
+  enabled     Boolean      @default(true)
+  position    Int          @default(0)
+  answers     Answer[]
+  subject     Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([subjectId], map: "questions_subjectId_fkey")
+  @@map("questions")
+}
+
+model Answer {
+  id         Int      @id @default(autoincrement())
+  questionId Int
+  content    String   @db.Text
+  isRight    Boolean  @default(false)
+  weight     Float    @default(0)
+  position   Int      @default(0)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId], map: "answers_questionId_fkey")
+  @@map("answers")
+}
+
+model Exam {
+  id               Int             @id @default(autoincrement())
+  name             String
+  description      String?         @db.Text
+  startTime        DateTime
+  endTime          DateTime
+  duration         Int
+  token            String?         @unique
+  enabled          Boolean         @default(true)
+  basePoints       Float           @default(1)
+  wrongPoints      Float           @default(0)
+  noAnswerPoints   Float           @default(0)
+  minScore         Float           @default(0)
+  ipRange          String?         @default("*.*.*.*")
+  canRepeat        Boolean         @default(false)
+  autoLogout       Boolean         @default(true)
+  sslRequired      Boolean         @default(false)
+  shuffleQuestions Boolean         @default(true)
+  shuffleAnswers   Boolean         @default(true)
+  showPrevious     Boolean         @default(true)
+  showNext         Boolean         @default(true)
+  showMenu         Boolean         @default(true)
+  showResultToUser Boolean         @default(false)
+  showKkmToUser    Boolean         @default(false)
+  showReportToUser Boolean         @default(false)
+  scoreToLiveScore Boolean         @default(false)
+  isHighVariation  Boolean         @default(false)
+  testComment      String?         @db.Text
+  createdAt        DateTime        @default(now())
+  results          ExamResult[]
+  topicRules       TestTopicRule[]
+  groups           Group[]         @relation("examgroups")
+
+  @@map("exams")
+}
+
+model TestTopicRule {
+  id            Int     @id @default(autoincrement())
+  examId        Int
+  subjectId     Int
+  questionCount Int     @default(1)
+  questionType  String? @default("all")
+  difficulty    Int?    @default(1)
+  answerCount   Int?    @default(0)
+  exam          Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  subject       Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([examId], map: "test_topic_rules_examId_fkey")
+  @@index([subjectId], map: "test_topic_rules_subjectId_fkey")
+  @@map("test_topic_rules")
+}
+
+model ExamResult {
+  id          Int       @id @default(autoincrement())
+  examId      Int
+  userId      Int
+  score       Float     @default(0)
+  answersJson String    @db.LongText
+  status      String    @default("COMPLETED")
+  ipAddress   String?
+  userAgent   String?
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  exam        Exam      @relation(fields: [examId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([examId], map: "exam_results_examId_fkey")
+  @@index([userId], map: "exam_results_userId_fkey")
+  @@map("exam_results")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    Int
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "sessions_userId_fkey")
+  @@map("sessions")
+}
+
+model AppSetting {
+  key   String @id
+  value String @db.LongText
+
+  @@map("app_settings")
+}
+
+enum UserLevel {
+  STUDENT
+  TEACHER
+  PROCTOR
+  ADMIN
+}
+
+enum QuestionType {
+  MCSA
+  MCMA
+  ESSAY
+  FIB
+  ORDERING
+  MATCHING
+}
