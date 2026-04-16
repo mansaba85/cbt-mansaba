@@ -4,7 +4,7 @@
  * dan tidak memerlukan rendering komponen React dashboard di layar.
  */
 
-export const printReport = (title: string, contentHtml: string, options: { landscape?: boolean; styles?: string } = {}) => {
+export const printReport = (title: string, contentHtml: string, options: { landscape?: boolean; styles?: string; paperSize?: string } = {}) => {
   const iframe = document.createElement('iframe');
   
   // Sembunyikan iframe dari tampilan
@@ -32,7 +32,7 @@ export const printReport = (title: string, contentHtml: string, options: { lands
     }
     @page { 
       margin: 0; 
-      size: A4 ${options.landscape ? 'landscape' : 'portrait'};
+      size: ${options.paperSize || 'A4'} ${options.landscape ? 'landscape' : 'portrait'};
     }
     body { 
       font-family: 'Inter', 'Segoe UI', Arial, sans-serif; 

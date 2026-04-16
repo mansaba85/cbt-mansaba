@@ -58,66 +58,58 @@ const ParticipantCards: React.FC = () => {
 
     const handlePrint = () => {
         const html = `
-          <div class="header" style="border-bottom: 2px solid #000; padding-bottom: 20px; display: flex; flex-direction: column; align-items: center; text-align: center;">
-            ${logo ? `<img src="${logo}" style="width: 60px; height: 60px; object-fit: contain; margin-bottom: 10px;" />` : ''}
-            <div class="header-text">
-              <h1>DAFTAR KARTU LOGIN PESERTA</h1>
-              <p style="font-size: 10px; font-weight: 900; color: #64748b;">${institution?.name || 'CBT Modern System'}</p>
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 30px;">
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 15mm 8mm; width: 215mm; margin: 0 auto;">
             ${users.map(user => `
-              <div class="card-item" style="width: 9.3cm; height: 6.3cm; border: 1.5px solid #0f172a; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; background: #fff; break-inside: avoid; page-break-inside: avoid;">
+              <div class="card-item" style="width: 9.8cm; height: 5.8cm; border: 1.5px solid #000; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; background: #fff !important; break-inside: avoid; page-break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; box-shadow: 0 0 0 0.5px #eee;">
                  <!-- Template Header -->
-                 <div style="padding: 10px; border-bottom: 1.5px solid #0f172a; display: flex; align-items: center; justify-content: center; gap: 12px; background: #f8fafc; height: 1.8cm;">
+                 <div style="padding: 8px 12px; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; gap: 12px; background: #f8fafc !important; height: 1.6cm; -webkit-print-color-adjust: exact;">
                     ${logo ? `<img src="${logo}" style="width: 40px; height: 40px; object-fit: contain;" />` : ''}
                     <div style="text-align: center">
-                       <h2 style="margin: 0; font-size: 11px; font-weight: 900; text-transform: uppercase; color: #0f172a;">KARTU PESERTA UJIAN</h2>
-                       <h3 style="margin: 0; font-size: 10px; font-weight: 900; color: #4338ca; text-transform: uppercase;">${institution?.name || 'INSTITUSI'}</h3>
-                       <p style="margin: 2px 0 0 0; font-size: 6px; color: #64748b; font-weight: bold;">${institution?.address1 || ''}</p>
+                       <h2 style="margin: 0; font-size: 11px; font-weight: 950; text-transform: uppercase; letter-spacing: 0.5px;">KARTU LOGIN PESERTA</h2>
+                       <h3 style="margin: 0; font-size: 10px; font-weight: 950; color: #4338ca !important; text-transform: uppercase;">${institution?.name || 'INSTITUSI'}</h3>
                     </div>
                  </div>
                  
                  <!-- Content -->
-                 <div style="padding: 15px; display: flex; gap: 15px; flex: 1; align-items: center;">
-                    <div style="width: 2.1cm; height: 2.8cm; background: #f1f5f9; border: 1px dashed #cbd5e1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
-                        <span style="font-size: 7px; color: #94a3b8; font-weight: 900; text-align: center;">PAS FOTO<br>2 x 3</span>
+                 <div style="padding: 15px 20px; display: flex; gap: 15px; flex: 1; align-items: center;">
+                    <div style="width: 2.1cm; height: 2.8cm; background: #f1f5f9 !important; border: 1px dashed #cbd5e1; display: flex; flex-direction: column; align-items: center; justify-content: center; -webkit-print-color-adjust: exact;">
+                        <span style="font-size: 6px; color: #94a3b8; font-weight: 950; text-align: center;">FOTO<br>2 x 3</span>
                     </div>
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
                        <div>
-                          <p style="margin: 0; font-size: 8px; font-weight: 900; color: #94a3b8; text-transform: uppercase; font-style: italic;">Nama Lengkap:</p>
-                          <p style="margin: 1px 0 0 0; font-size: 13px; font-weight: 900; text-transform: uppercase; color: #0f172a;">${user.fullName}</p>
+                          <p style="margin: 0; font-size: 8px; font-weight: 950; color: #64748b; text-transform: uppercase;">Nama Lengkap:</p>
+                          <p style="margin: 1px 0 0 0; font-size: 13px; font-weight: 950; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px;">${user.fullName}</p>
                        </div>
-                       <div>
-                          <p style="margin: 0; font-size: 8px; font-weight: 900; color: #94a3b8; text-transform: uppercase; font-style: italic;">Nomor Peserta:</p>
-                          <p style="margin: 1px 0 0 0; font-size: 18px; font-weight: 900; color: #4338ca; font-family: monospace;">${user.username}</p>
-                       </div>
-                       <div>
-                          <p style="margin: 0; font-size: 8px; font-weight: 900; color: #94a3b8; text-transform: uppercase; font-style: italic;">PIN / Password:</p>
-                          <p style="margin: 1px 0 0 0; font-size: 18px; font-weight: 900; color: #e11d48; font-family: monospace; letter-spacing: 2.5px;">${user.password || '******'}</p>
+                       <div style="display: flex; flex-direction: column; gap: 4px;">
+                           <div style="display: flex; justify-content: space-between;">
+                              <span style="font-size: 8px; font-weight: 950; color: #64748b;">USERNAME:</span>
+                              <span style="font-size: 8px; font-weight: 950; color: #64748b;">PIN/PASS:</span>
+                           </div>
+                           <div style="display: flex; justify-content: space-between; align-items: center;">
+                              <span style="font-size: 18px; font-weight: 950; color: #4338ca !important; font-family: monospace;">${user.username}</span>
+                              <span style="font-size: 18px; font-weight: 950; color: #e11d48 !important; font-family: monospace;">${user.password || '******'}</span>
+                           </div>
                        </div>
                     </div>
                  </div>
                  
                  <!-- Footer Card -->
-                 <div style="padding: 8px 15px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="padding: 3px 10px; background: #0f172a; color: #fff; font-size: 8px; font-weight: 900; border-radius: 5px; text-transform: uppercase;">${user.group?.name || 'UMUM'}</span>
+                 <div style="padding: 6px 15px; border-top: 1.5px solid #222; display: flex; justify-content: space-between; align-items: center; background: #fcfcfc !important; -webkit-print-color-adjust: exact; height: 0.9cm;">
+                    <span style="padding: 3px 10px; background: #0f172a !important; color: #fff !important; font-size: 8px; font-weight: 950; border-radius: 4px; text-transform: uppercase;">${user.group?.name || 'UMUM'}</span>
                     <div style="text-align: right">
-                       <div style="display: flex; gap: 0.5px; height: 12px; align-items: flex-end; justify-content: flex-end;">
-                          ${Array(12).fill(0).map((_, i) => `<div style="width: ${i % 3 === 0 ? 2 : 1}px; height: 100%; background: #000;"></div>`).join('')}
-                       </div>
-                       <p style="margin: 2px 0 0 0; font-size: 6px; font-family: monospace; color: #64748b;">${user.username}</p>
+                        <p style="margin: 0; font-size: 7px; font-family: monospace; color: #64748b; font-weight: bold;">CBT SYSTEM - ${user.username}</p>
                     </div>
                  </div>
-                 <div style="height: 4px; background: linear-gradient(to right, #4338ca, #7c3aed);"></div>
+                 <div style="height: 5px; background: #4338ca !important; -webkit-print-color-adjust: exact;"></div>
               </div>
             `).join('')}
           </div>
         `;
 
         import('../../utils/printReport').then(m => {
-            m.printReport(`Kartu_Siswa_${selectedGroup}`, html);
+            m.printReport(`Kartu_Siswa_${selectedGroup}`, html, {
+                paperSize: '215mm 330mm'
+            });
         });
     };
 
@@ -134,7 +126,7 @@ const ParticipantCards: React.FC = () => {
         <div className="space-y-6 animate-in fade-in duration-500 pb-20">
             <div className="no-print space-y-6">
             {/* Header Screen Only */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-200">
                         <CreditCard className="w-6 h-6" />
@@ -144,14 +136,25 @@ const ParticipantCards: React.FC = () => {
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Hasilkan kartu login untuk siswa</p>
                     </div>
                 </div>
-                {users.length > 0 && (
-                    <button 
-                        onClick={handlePrint}
-                        className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl active:scale-95"
-                    >
-                        <Printer className="w-4 h-4" /> Cetak Sekarang
-                    </button>
-                )}
+                <div className="flex items-center gap-4">
+                    <div className="bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl flex items-center gap-3">
+                        <div className="w-8 h-8 bg-amber-200 rounded-lg flex items-center justify-center animate-pulse">
+                            <AlertCircle className="w-5 h-5 text-amber-700" />
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-black text-amber-800 uppercase leading-none mb-1">Penting saat cetak:</p>
+                            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-tight">Ceklis opsi "Background Graphics" agar warna muncul</p>
+                        </div>
+                    </div>
+                    {users.length > 0 && (
+                        <button 
+                            onClick={handlePrint}
+                            className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl active:scale-95"
+                        >
+                            <Printer className="w-4 h-4" /> Cetak Sekarang
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Filter Panel Screen Only */}
@@ -183,20 +186,61 @@ const ParticipantCards: React.FC = () => {
               </div>
             </div>
 
-            {/* Empty State Screen Only */}
-            {!users.length && !selectedGroup && !isFetching && (
-                <div className="no-print bg-slate-50 border-2 border-dashed border-slate-200 rounded-[3rem] py-32 text-center">
-                    <LayoutGrid className="w-12 h-12 text-slate-200 mx-auto mb-6" />
-                    <h3 className="text-xl font-bold text-slate-400 uppercase tracking-tighter">Siap Untuk Mencetak</h3>
-                    <p className="text-sm text-slate-400 max-w-xs mx-auto font-medium">Pilih grup atau kelas di atas untuk men-generate kartu login peserta.</p>
+            {/* Cards Preview Grid */}
+            {users.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
+                    {users.map(user => (
+                        <div key={user.id} className="bg-white border-2 border-slate-900 rounded-3xl overflow-hidden shadow-xl flex flex-col group hover:scale-[1.02] transition-all">
+                            <div className="p-4 border-b-2 border-slate-900 bg-slate-50 flex items-center gap-3">
+                                {logo ? <img src={logo} className="w-8 h-8 object-contain" alt="Logo" /> : <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center"><Building2 className="w-4 h-4 text-indigo-600" /></div>}
+                                <div className="leading-tight">
+                                    <h4 className="text-[10px] font-black uppercase text-slate-900">Kartu Peserta</h4>
+                                    <p className="text-[9px] font-bold text-indigo-600 uppercase truncate max-w-[150px]">{institution?.name || 'CBT System'}</p>
+                                </div>
+                            </div>
+                            <div className="p-6 space-y-4 flex-1">
+                                <div>
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Nama Lengkap</p>
+                                    <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{user.fullName}</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Username</p>
+                                        <p className="text-lg font-black text-indigo-600 font-mono tracking-tighter">{user.username}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">PIN / Password</p>
+                                        <p className="text-lg font-black text-rose-600 font-mono tracking-widest">{user.password || '******'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="px-6 py-3 bg-slate-900 flex justify-between items-center text-white">
+                                <span className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-md">{user.group?.name || 'UMUM'}</span>
+                                <div className="flex gap-0.5">
+                                    {Array(8).fill(0).map((_, i) => <div key={i} className={`w-0.5 h-3 bg-white ${i % 3 === 0 ? 'opacity-100' : 'opacity-40'}`}></div>)}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
             
-            {users.length === 0 && selectedGroup && !isFetching && (
-                <div className="no-print bg-slate-50 border-2 border-dashed border-slate-200 rounded-[3rem] py-20 text-center">
-                    <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-slate-400 uppercase tracking-tight">Tidak Ada Data Siswa</h3>
-                    <p className="text-sm text-slate-400 font-medium">Silakan pilih kelas yang memiliki daftar siswa.</p>
+            {/* Empty State Screen Only */}
+            {users.length === 0 && !isFetching && (
+                <div className="no-print bg-slate-50 border-2 border-dashed border-slate-200 rounded-[3rem] py-32 text-center">
+                    {selectedGroup ? (
+                        <>
+                            <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                            <h3 className="text-xl font-bold text-slate-400 uppercase tracking-tight">Tidak Ada Data Siswa</h3>
+                            <p className="text-sm text-slate-400 font-medium max-w-xs mx-auto">Grup ini kosong. Pilih grup lain atau tambahkan siswa ke grup ini terlebih dahulu.</p>
+                        </>
+                    ) : (
+                        <>
+                            <LayoutGrid className="w-12 h-12 text-slate-200 mx-auto mb-6" />
+                            <h3 className="text-xl font-bold text-slate-400 uppercase tracking-tighter">Siap Untuk Mencetak</h3>
+                            <p className="text-sm text-slate-400 max-w-xs mx-auto font-medium">Pilih grup atau kelas di atas untuk men-generate kartu login peserta.</p>
+                        </>
+                    )}
                 </div>
             )}
         </div>
