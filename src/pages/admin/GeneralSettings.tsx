@@ -121,6 +121,7 @@ const GeneralSettings: React.FC = () => {
     showSaveButton: false,
     forceFullscreen: true,
     testDescription: true,
+    showScoreToStudent: true,
   });
 
   // Initial Load
@@ -331,6 +332,7 @@ const GeneralSettings: React.FC = () => {
         <ToggleOption id="realtimeGrading" label="Realtime Grading" description="Jika diaktifkan, semua jawaban akan dinilai langsung ke database. Jika dimatikan, semua jawaban harus dinilai manual dengan menekan tombol Regrade." defaultNote="aktif" checked={testSettings.realtimeGrading} onChange={setTest('realtimeGrading')} />
         <ToggleOption id="answerAllQuestions" label="Answer All Questions" description="If enable all questions must be answered before stopping the test." defaultNote="enable" checked={testSettings.answerAllQuestions} onChange={setTest('answerAllQuestions')} />
         <ToggleOption id="showTerminateOnlyWhenAnswered" label="Show Terminate Button Only When All Answered" description="If enable, show terminate button only when all question has been marked answered." defaultNote="disable" checked={testSettings.showTerminateOnlyWhenAnswered} onChange={setTest('showTerminateOnlyWhenAnswered')} />
+        <ToggleOption id="showScoreToStudent" label="Tampilkan Skor ke Siswa" description="Jika diaktifkan, siswa dapat melihat skor akhir mereka setelah menekan tombol selesai atau di halaman riwayat ujian." defaultNote="aktif" checked={testSettings.showScoreToStudent} onChange={setTest('showScoreToStudent')} />
 
         <div className="pt-2">
           <label className="text-xs font-bold text-slate-700 block mb-1.5">Allow Terminate Test After n-persen Time</label>

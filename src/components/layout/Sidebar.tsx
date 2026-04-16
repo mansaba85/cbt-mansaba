@@ -82,7 +82,6 @@ const menuItems: MenuItem[] = [
       { name: 'Cetak Daftar Hadir (Form)', path: '/admin/exams/attendance-form', icon: PrinterIcon },
     ]
   },
-  { id: 6, name: 'Alat Administrasi', icon: FileText, path: '/admin/tools' },
   {
     id: 7,
     name: 'Pengaturan',
@@ -143,7 +142,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="w-72 h-screen bg-slate-900 text-white flex flex-col shadow-2xl relative">
+    <div className="w-72 h-screen bg-gradient-to-b from-[#1e1b4b] via-[#0f172a] to-[#020617] text-slate-300 flex flex-col shadow-2xl relative border-r border-indigo-500/20 overflow-hidden">
+      {/* Background Decorative Glows */}
+      <div className="absolute top-[-5%] left-[-5%] w-[50%] h-[40%] bg-indigo-500/15 blur-[80px] pointer-events-none animate-pulse"></div>
+      <div className="absolute bottom-[-5%] right-[-5%] w-[50%] h-[40%] bg-purple-500/15 blur-[80px] pointer-events-none"></div>
+
       {/* Sidebar Header */}
       <div className="p-8 pb-6">
         <div className="flex items-center justify-between">
@@ -174,8 +177,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
               {hasSubmenu ? (
                 <button
                   onClick={() => toggleSubmenu(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-300 group ${
-                    isSubmenuOpen ? 'bg-white/5 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-300 group relative ${
+                    isSubmenuOpen ? 'bg-white/10 text-white shadow-lg shadow-black/20' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                   }`}
                 >
                   <Icon className={`w-4 h-4 transition-colors ${isSubmenuOpen ? 'text-indigo-500' : 'text-slate-500 group-hover:text-indigo-500'}`} />
@@ -190,7 +193,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
                   className={({ isActive }) => `
                     flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all relative group
                     ${isActive 
-                      ? 'bg-white/10 text-white shadow-sm' 
+                      ? 'bg-gradient-to-r from-indigo-500/20 to-transparent text-white border-l-2 border-indigo-500 rounded-r-none' 
                       : 'text-slate-400 hover:text-white hover:bg-white/5'}
                   `}
                 >
@@ -205,7 +208,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
               )}
 
               {hasSubmenu && isSubmenuOpen && (
-                <div className="pl-4 space-y-0.5 mt-1 border-l border-slate-800 ml-6 animate-in slide-in-from-left-1 duration-300">
+                <div className="pl-4 space-y-0.5 mt-1 border-l border-white/5 ml-6 animate-in slide-in-from-left-1 duration-300">
                   {item.subItems?.map((sub, idx) => {
                     const SubIcon = sub.icon;
                     return (
@@ -239,7 +242,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       </nav>
 
       {/* Profile & Logout Section */}
-      <div className="p-4 border-t border-slate-800/50 bg-slate-900/30">
+      <div className="p-4 border-t border-white/10 bg-black/20 backdrop-blur-md">
         <div className="flex items-center gap-3 p-2 rounded-2xl bg-white/5 border border-white/5 group transition-all">
           <div className="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-800 flex items-center justify-center font-black text-white shadow-lg">
             {adminName.charAt(0)}

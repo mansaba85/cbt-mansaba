@@ -7,7 +7,8 @@ import {
   UserX, 
   ChevronDown,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Printer
 } from 'lucide-react';
 
 const AttendanceManager: React.FC = () => {
@@ -19,6 +20,8 @@ const AttendanceManager: React.FC = () => {
   const [isLoadingInitial, setIsLoadingInitial] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [attendanceData, setAttendanceData] = useState<any>(null);
+  const [institution, setInstitution] = useState<any>(null);
+  const [logo, setLogo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Load Exam and Group list on Mount
@@ -26,12 +29,17 @@ const AttendanceManager: React.FC = () => {
     const fetchBaseData = async () => {
         setIsLoadingInitial(true);
         try {
-            const [eRes, gRes] = await Promise.all([
+            const [eRes, gRes, sRes] = await Promise.all([
                 fetch('http://localhost:3001/api/exams'),
-                fetch('http://localhost:3001/api/groups')
+                fetch('http://localhost:3001/api/groups'),
+                fetch('http://localhost:3001/api/settings')
             ]);
             setExams(await eRes.json());
             setGroups(await gRes.json());
+
+            const settings = await sRes.json();
+            if (settings.cbt_institution_settings) setInstitution(settings.cbt_institution_settings);
+            if (settings.cbt_logo_preview) setLogo(settings.cbt_logo_preview);
         } catch (err) {
             console.error("Gagal memuat filter:", err);
         } finally {
@@ -98,6 +106,91 @@ const AttendanceManager: React.FC = () => {
     XLSX.writeFile(wb, `Data_Absen_${attendanceData.examName.replace(/ /g, '_')}.xlsx`);
   };
 
+  const handlePrint = () => {
+    if (!attendanceData) return;
+
+    const groupName = selectedGroup ? groups.find(g => g.id.toString() === selectedGroup)?.name : 'Semua Grup';
+
+    const html = `
+      <div class="header">
+        ${logo ? `<img src="${logo}" alt="Logo" />` : '<div class="header-spacer"></div>'}
+        <div class="header-text">
+            <h1>${institution?.name || 'DAFTAR KEHADIRAN'}</h1>
+            <p>${institution?.address1 || ''} ${institution?.address2 || ''}</p>
+            <p style="font-style: italic; font-size: 8px;">${institution?.address3 || ''}</p>
+        </div>
+        <div class="header-spacer"></div>
+      </div>
+
+      <div class="title-area">
+        <h2>REKAPITULASI KEHADIRAN PESERTA UJIAN (CBT)</h2>
+        <p style="font-size: 11px; font-weight: bold; margin-top: 2px;">NOMOR DOKUMEN: ATT-${new Date().getFullYear()}/${selectedExam}</p>
+      </div>
+
+      <div class="meta-grid">
+        <div>
+          <p>Mata Pelajaran: ${attendanceData.examName}</p>
+          <p>Filter Grup: ${groupName}</p>
+          <p>Total Peserta: ${attendanceData.totalStudents}</p>
+        </div>
+        <div class="meta-right">
+          <p>Hadir: ${attendanceData.presentCount} (${attendanceData.presentPercentage})</p>
+          <p>Absen: ${attendanceData.absentCount}</p>
+          <p>Tanggal Cetak: ${new Date().toLocaleString('id-ID')}</p>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; font-weight: bold; background: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px;">
+        DAFTAR PESERTA TIDAK HADIR (ABSEN)
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 40px" class="text-center">No</th>
+            <th style="width: 150px">ID / Username</th>
+            <th>Nama Lengkap Peserta</th>
+            <th style="width: 150px" class="text-center">Grup / Rombel</th>
+            <th style="width: 120px" class="text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${attendanceData.absentStudents.map((s: any, i: number) => `
+            <tr>
+              <td class="text-center">${i + 1}</td>
+              <td style="font-family: monospace;">${s.username}</td>
+              <td class="font-bold uppercase">${s.name}</td>
+              <td class="text-center">${s.group}</td>
+              <td class="text-center" style="color: #be123c; font-weight: bold; font-size: 8px;">TIDAK HADIR</td>
+            </tr>
+          `).join('')}
+          ${attendanceData.absentStudents.length === 0 ? '<tr><td colspan="5" style="text-align: center; font-style: italic; padding: 40px; color: #666;">Seluruh peserta hadir (Nihil Absen)</td></tr>' : ''}
+        </tbody>
+      </table>
+
+      <div class="footer-sign" style="margin-top: 60px;">
+        <div class="sign-box">
+          <p>Mengetahui,</p>
+          <p>Admin CBT System</p>
+          <div class="sign-space" style="height: 60px;"></div>
+          <div class="sign-line" style="width: 200px;"></div>
+          <p style="font-size: 9px; margin-top: 5px;">NIP. ..............................</p>
+        </div>
+        <div class="sign-box">
+          <p>Proktor Utama,</p>
+          <p>Petugas Ruang</p>
+          <div class="sign-space" style="height: 60px;"></div>
+          <div class="sign-line" style="width: 200px;"></div>
+          <p style="font-size: 9px; margin-top: 5px;">NIP. ..............................</p>
+        </div>
+      </div>
+    `;
+
+    import('../../utils/printReport').then(m => {
+        m.printReport(`Rekap_Absen_${attendanceData.examName}`, html);
+    });
+  };
+
   if (isLoadingInitial) {
       return (
         <div className="min-h-[400px] flex flex-col items-center justify-center">
@@ -109,6 +202,7 @@ const AttendanceManager: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+      <div className="no-print space-y-6">
       {/* Header Simple */}
       <div className="flex items-center gap-4">
         <div className="p-2 bg-indigo-600 rounded text-white shadow-lg shadow-indigo-200">
@@ -208,13 +302,22 @@ const AttendanceManager: React.FC = () => {
                   <UserX className="w-5 h-5 text-rose-600" />
                   <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Peserta Tidak Hadir (Absen)</h3>
                </div>
-               <button 
-                 onClick={exportToExcel}
-                 disabled={attendanceData.absentStudents.length === 0}
-                 className="flex items-center gap-2 px-5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:scale-100"
-               >
-                  <FileDown className="w-4 h-4" /> Export Excel
-               </button>
+               <div className="flex items-center gap-2">
+                  <button 
+                    onClick={exportToExcel}
+                    disabled={attendanceData.absentStudents.length === 0}
+                    className="flex items-center gap-2 px-5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:scale-100"
+                  >
+                     <FileDown className="w-4 h-4" /> Export Excel
+                  </button>
+                  <button 
+                    onClick={handlePrint}
+                    disabled={attendanceData.absentStudents.length === 0}
+                    className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-30"
+                  >
+                     <Printer className="w-4 h-4" /> Cetak PDF
+                  </button>
+               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -266,6 +369,7 @@ const AttendanceManager: React.FC = () => {
           </div>
         </div>
       )}
+     </div>
     </div>
   );
 };

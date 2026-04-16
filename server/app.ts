@@ -356,9 +356,22 @@ app.get('/api/proctoring', async (req, res) => {
 
         const answers = recentResult.answersJson ? JSON.parse(recentResult.answersJson) : {};
         const answered = Object.keys(answers).length;
-        if (status === 'online') {
+        if (status === 'online' || status === 'locked') {
           progress = answered > 0 ? Math.min(100, answered * 2) : 0;
           questionNo = answered;
+          
+          let seconds = 0;
+          if (recentResult.remainingSeconds !== null && recentResult.remainingSeconds !== undefined) {
+             seconds = recentResult.remainingSeconds;
+          } else {
+             const duration = (recentResult.exam?.duration || 60) * 60;
+             const elapsed = Math.floor((Date.now() - new Date(recentResult.startedAt).getTime()) / 1000);
+             seconds = Math.max(0, duration - elapsed);
+          }
+          
+          const mins = Math.floor(seconds / 60);
+          const secs = seconds % 60;
+          timeLeft = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
       }
 
@@ -386,42 +399,40 @@ app.get('/api/proctoring', async (req, res) => {
 
 app.post('/api/proctoring/:id/action', async (req, res) => {
   const { id } = req.params;
-  const { action } = req.body;
+  const { action, timeLeft } = req.body;
   if (!prisma) return res.status(500).json({ success: false });
 
   try {
     const userId = parseInt(id);
-    
-    // Find recent result for this user
     const recentResult = await prisma.examResult.findFirst({
         where: { userId },
         orderBy: { startedAt: 'desc' }
     });
 
-    if (action === 'unlock' || action === 'reset_warnings') {
-      if (recentResult) {
-        await prisma.examResult.update({
-          where: { id: recentResult.id },
-          data: { status: 'ONGOING' }
-        });
-      }
-    } else if (action === 'suspend') {
+    // Helper to update result if exists
+    const updateResult = async (data: any) => {
         if (recentResult) {
             await prisma.examResult.update({
-              where: { id: recentResult.id },
-              data: { status: 'SUSPENDED' }
+                where: { id: recentResult.id },
+                data: { 
+                    ...data,
+                    remainingSeconds: timeLeft ? parseInt(timeLeft) : recentResult.remainingSeconds
+                }
             });
         }
+    };
+
+    if (action === 'unlock' || action === 'reset_warnings') {
+      await updateResult({ status: 'ONGOING' });
+    } else if (action === 'suspend') {
+      await updateResult({ status: 'SUSPENDED' });
     } else if (action === 'logout') {
         await prisma.session.deleteMany({ where: { userId } });
+        await updateResult({ status: 'SUSPENDED' });
     } else if (action === 'reset_finished') {
-        if (recentResult) {
-            await prisma.examResult.update({
-              where: { id: recentResult.id },
-              data: { status: 'ONGOING', finishedAt: null }
-            });
-        }
-    } else if (action === 'add_time') {
+      await updateResult({ status: 'ONGOING', finishedAt: null, score: 0, remainingSeconds: null });
+    }
+ else if (action === 'add_time') {
         // Placeholder for time extension logic
     } else if (action === 'toggle_cheat_exempt') {
       const settingRow = await prisma.appSetting.findUnique({ where: { key: 'cbt_cheat_exempt_users' } });
@@ -760,7 +771,23 @@ app.post('/api/exams/:id/start', async (req, res) => {
     });
 
     if (result) {
-      return res.json({ success: true, resultId: result.id, answers: JSON.parse(result.answersJson || '{}') });
+      const exam = await prisma.exam.findUnique({ where: { id: parseInt(id) } });
+      const durationSec = (exam?.duration || 60) * 60;
+      
+      let remainingSec = 0;
+      if (result.remainingSeconds !== null && result.remainingSeconds !== undefined) {
+          remainingSec = result.remainingSeconds;
+      } else {
+          const elapsedSec = Math.floor((Date.now() - new Date(result.startedAt).getTime()) / 1000);
+          remainingSec = Math.max(0, durationSec - elapsedSec);
+      }
+
+      return res.json({ 
+        success: true, 
+        resultId: result.id, 
+        answers: JSON.parse(result.answersJson || '{}'),
+        remainingSeconds: remainingSec
+      });
     }
 
     // Checking if there is a COMPLETED one to see if we can repeat
@@ -781,7 +808,12 @@ app.post('/api/exams/:id/start', async (req, res) => {
         data: { examId: parseInt(id), userId: parseInt(userId), status: 'ONGOING', answersJson: '{}' }
     });
 
-    res.json({ success: true, resultId: result.id, answers: JSON.parse(result.answersJson || '{}') });
+    res.json({ 
+        success: true, 
+        resultId: result.id, 
+        answers: JSON.parse(result.answersJson || '{}'),
+        remainingSeconds: (exam?.duration || 60) * 60
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: 'Gagal memulai sesi ujian' });
@@ -794,30 +826,30 @@ app.post('/api/exams/:id/start', async (req, res) => {
 app.post('/api/exams/:id/save-progress', async (req, res) => {
     if (!prisma) return res.status(500).json({ success: false });
     const { id } = req.params;
-    const { userId, answers } = req.body;
+    const { userId, answers, timeLeft } = req.body;
+    
     try {
         const result = await prisma.examResult.findFirst({
-            where: { examId: parseInt(id), userId: parseInt(userId), status: 'ONGOING' },
+            where: { examId: parseInt(id), userId: parseInt(userId) },
             orderBy: { startedAt: 'desc' }
         });
+        
         if (!result) return res.status(404).json({ success: false, error: 'Sesi tidak ditemukan' });
-        await prisma.examResult.update({
+        
+        console.log(`[SAVE] User: ${userId}, Time: ${timeLeft}s, Status: ${result.status}`);
+
+        // Update regardless of status to ensure time is saved if they are suspended
+        const updated = await prisma.examResult.update({
             where: { id: result.id },
-            data: { answersJson: JSON.stringify(answers) }
+            data: { 
+                answersJson: JSON.stringify(answers || {}),
+                remainingSeconds: timeLeft !== undefined ? Number(timeLeft) : undefined
+            }
         });
 
-        // --- REAL-TIME GRADING CHECK ---
-        const testSettingsJson = await prisma.appSetting.findUnique({ where: { key: 'cbt_test_settings' } });
-        if (testSettingsJson) {
-            const config = JSON.parse(testSettingsJson.value);
-            if (config.realtimeGrading) {
-                console.log(`[REALTIME] Recalculating score for Result ID: ${result.id}...`);
-                await calculateScoreForExamResult(result.id);
-            }
-        }
-
-        res.json({ success: true });
+        res.json({ success: true, status: updated.status });
     } catch (e) {
+        console.error("[SAVE ERROR]", e);
         res.status(500).json({ success: false });
     }
 });
@@ -1478,6 +1510,49 @@ app.post('/api/results/:id/regrade', async (req, res) => {
   }
 });
 
+// ACTION on Exam Result (Lock, Unlock, Add Time)
+app.post('/api/results/:id/action', async (req, res) => {
+  const { id } = req.params;
+  const { action } = req.body;
+  if (!prisma) return res.status(500).json({ success: false });
+
+  try {
+    const resultId = parseInt(id);
+    const result = await prisma.examResult.findUnique({
+        where: { id: resultId }
+    });
+
+    if (!result) return res.status(404).json({ success: false, error: 'Hasil tidak ditemukan' });
+
+    if (action === 'lock') {
+        // Suspend the result and KILL session
+        await prisma.session.deleteMany({ where: { userId: result.userId } });
+        await prisma.examResult.update({
+            where: { id: resultId },
+            data: { status: 'SUSPENDED' }
+        });
+    } else if (action === 'unlock') {
+        // Resume result
+        await prisma.examResult.update({
+            where: { id: resultId },
+            data: { status: 'ONGOING' }
+        });
+    } else if (action === 'add_time_5') {
+        // Add 300 seconds (5 min)
+        const currentSecs = result.remainingSeconds !== null ? result.remainingSeconds : (await prisma.exam.findUnique({where:{id:result.examId}}))?.duration * 60 || 3600;
+        await prisma.examResult.update({
+            where: { id: resultId },
+            data: { remainingSeconds: currentSecs + 300 }
+        });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+});
+
 // DELETE Exam Result
 // GET Result Review
 app.get('/api/results/:id/review', async (req, res) => {
@@ -1640,7 +1715,7 @@ app.get('/api/exams/:id/attendance', async (req, res) => {
     // 1. Get Exam with its groups
     const exam = await prisma.exam.findUnique({
       where: { id: parseInt(id) },
-      include: { allowedGroups: true }
+      include: { groups: true }
     });
 
     if (!exam) return res.status(404).json({ error: 'Ujian tidak ditemukan' });
@@ -1650,7 +1725,7 @@ app.get('/api/exams/:id/attendance', async (req, res) => {
     if (groupId) {
         targetGroupIds = [parseInt(groupId as string)];
     } else {
-        targetGroupIds = exam.allowedGroups.map(g => g.id);
+        targetGroupIds = exam.groups.map(g => g.id);
     }
 
     // 3. Get All Students in those Groups
@@ -1805,7 +1880,7 @@ app.get('/api/exams', async (req, res) => {
   try {
     const exams = await prisma.exam.findMany({
       include: { 
-        allowedGroups: true,
+        groups: true,
         topicRules: { include: { subject: true } }
       },
       orderBy: { startTime: 'desc' }
@@ -1911,16 +1986,16 @@ app.delete('/api/exams/:id', async (req, res) => {
 
 
 // ===== ITEM ANALYSIS API =====
+// ===== ITEM ANALYSIS API =====
 app.get('/api/analysis/exams/:examId', async (req, res) => {
     const { examId } = req.params;
     try {
         const exam = await prisma.exam.findUnique({
             where: { id: parseInt(examId) },
             include: {
-                questions: { include: { options: true } },
+                topicRules: true,
                 results: {
-                    where: { status: 'COMPLETED' },
-                    include: { answers: true }
+                    where: { status: 'COMPLETED' }
                 }
             }
         });
@@ -1929,22 +2004,47 @@ app.get('/api/analysis/exams/:examId', async (req, res) => {
             return res.status(404).json({ error: 'Ujian atau hasil tidak ditemukan/belum ada yang selesai' });
         }
 
+        // 1. Get all questions involved in this exam
+        const subjectIds = exam.topicRules.map(r => r.subjectId);
+        const questions = await prisma.question.findMany({
+            where: { subjectId: { in: subjectIds } },
+            include: { answers: true }
+        });
+
         const totalStudents = exam.results.length;
         const sortedResults = [...exam.results].sort((a, b) => b.score - a.score);
         const groupSize = Math.max(1, Math.round(totalStudents * 0.27));
         const upperGroup = sortedResults.slice(0, groupSize);
         const lowerGroup = sortedResults.slice(-groupSize);
 
-        const analysis = exam.questions.map(q => {
-            const answersToQ = exam.results.flatMap(r => r.answers.filter(a => a.questionId === q.id));
-            const correctCount = answersToQ.filter(a => a.isCorrect).length;
+        // Pre-parse answers for all students
+        const resultsWithParsedAnswers = exam.results.map(r => ({
+            ...r,
+            answers: JSON.parse(r.answersJson || '{}')
+        }));
+
+        const analysis = questions.map(q => {
+            // Check if this question was actually answered by anyone
+            const answersToQ = resultsWithParsedAnswers.filter(r => r.answers[q.id] !== undefined);
+            if (answersToQ.length === 0) return null;
+
+            const correctOption = q.answers.find(a => a.isRight);
+            const correctCount = answersToQ.filter(r => String(r.answers[q.id]) === String(correctOption?.id)).length;
+            
             const diffIdx = correctCount / totalStudents;
             let diffLabel = 'SEDANG';
             if (diffIdx < 0.3) diffLabel = 'SUKAR';
             if (diffIdx > 0.7) diffLabel = 'MUDAH';
 
-            const uCorrect = upperGroup.flatMap(r => r.answers.filter(a => a.questionId === q.id && a.isCorrect)).length;
-            const lCorrect = lowerGroup.flatMap(r => r.answers.filter(a => a.questionId === q.id && a.isCorrect)).length;
+            const uCorrect = upperGroup.filter(r => {
+                const ans = JSON.parse(r.answersJson || '{}');
+                return String(ans[q.id]) === String(correctOption?.id);
+            }).length;
+            const lCorrect = lowerGroup.filter(r => {
+                const ans = JSON.parse(r.answersJson || '{}');
+                return String(ans[q.id]) === String(correctOption?.id);
+            }).length;
+            
             const discIdx = (uCorrect / groupSize) - (lCorrect / groupSize);
             
             let discLabel = 'CUKUP';
@@ -1953,16 +2053,20 @@ app.get('/api/analysis/exams/:examId', async (req, res) => {
             else if (discIdx >= 0.2) discLabel = 'JELEK (DIPERBAIKI)';
             else discLabel = 'SANGAT JELEK (DIBUANG)';
 
-            const opts = q.options.map(o => ({
-                label: o.label,
-                count: answersToQ.filter(a => a.optionId === o.id).length,
-                isKey: q.answerLabel === o.label
+            const opts = q.answers.map(o => ({
+                label: o.id.toString(), // Simplified label if needed, or use position
+                count: resultsWithParsedAnswers.filter(r => String(r.answers[q.id]) === String(o.id)).length,
+                isKey: o.isRight
             }));
 
-            return { id: q.id, content: q.content, diffIdx: diffIdx.toFixed(2), diffLabel, discIdx: discIdx.toFixed(2), discLabel, opts };
-        });
+            // Attempt to use A, B, C... labels if possible
+            const alphaLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+            const optsWithLabels = opts.map((o, i) => ({ ...o, label: alphaLabels[i] || (i+1).toString() }));
 
-        res.json({ examTitle: exam.title, totalStudents, analysis });
+            return { id: q.id, content: q.content, diffIdx: diffIdx.toFixed(2), diffLabel, discIdx: discIdx.toFixed(2), discLabel, opts: optsWithLabels };
+        }).filter(item => item !== null);
+
+        res.json({ examTitle: exam.name, totalStudents, analysis });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Database Error: Gagal menghitung statistik' });

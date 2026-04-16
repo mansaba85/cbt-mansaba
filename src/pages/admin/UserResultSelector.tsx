@@ -34,18 +34,25 @@ const UserResultSelector: React.FC = () => {
     const [isFetchingStudents, setIsFetchingStudents] = useState(false);
     const [isFetchingDetail, setIsFetchingDetail] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [institution, setInstitution] = useState<any>(null);
+    const [logo, setLogo] = useState<string | null>(null);
 
-    // Initial load: Exams and Groups
+    // Initial load: Exams, Groups and Settings
     useEffect(() => {
         const fetchBaseData = async () => {
             setIsLoadingInitial(true);
             try {
-                const [eRes, gRes] = await Promise.all([
+                const [eRes, gRes, sRes] = await Promise.all([
                     fetch('http://localhost:3001/api/exams'),
-                    fetch('http://localhost:3001/api/groups')
+                    fetch('http://localhost:3001/api/groups'),
+                    fetch('http://localhost:3001/api/settings')
                 ]);
                 setExams(await eRes.json());
                 setGroups(await gRes.json());
+                
+                const settings = await sRes.json();
+                if (settings.cbt_institution_settings) setInstitution(settings.cbt_institution_settings);
+                if (settings.cbt_logo_preview) setLogo(settings.cbt_logo_preview);
             } catch (err) {
                 console.error("Gagal memuat data filter:", err);
             } finally {
@@ -117,7 +124,85 @@ const UserResultSelector: React.FC = () => {
         fetchDetail();
     }, [selectedResultId]);
 
-    const handlePrint = () => window.print();
+    const handlePrint = () => {
+        if (!studentInfo) return;
+
+        const html = `
+          <div class="header">
+            ${logo ? `<img src="${logo}" alt="Logo" />` : '<div class="header-spacer"></div>'}
+            <div class="header-text">
+                <h1>${institution?.name || 'TRANSKRIP HASIL UJIAN'}</h1>
+                <p>${institution?.address1 || ''} ${institution?.address2 || ''}</p>
+                <p style="font-style: italic; font-size: 8px;">${institution?.address3 || ''}</p>
+            </div>
+            <div class="header-spacer"></div>
+          </div>
+
+          <div class="title-area">
+            <h2>TRANSKRIP JAWABAN PESERTA (CBT)</h2>
+            <p style="font-size: 11px; font-weight: bold; margin-top: 5px;">NOMOR SERI: RES-${studentInfo.id}-${new Date().getTime()}</p>
+          </div>
+
+          <div class="meta-grid">
+            <div>
+              <p>Nama Peserta: ${studentInfo.name}</p>
+              <p>Username / ID: ${studentInfo.username}</p>
+              <p>Mata Ujian: ${studentInfo.testName} (${studentInfo.id})</p>
+            </div>
+            <div class="meta-right">
+              <p>Skor Akhir: <span style="font-size: 16px; font-weight: 900;">${studentInfo.points}</span></p>
+              <p>Status: <span style="color: ${studentInfo.points >= 75 ? '#059669' : '#dc2626'}; font-weight: bold;">${studentInfo.points >= 75 ? 'LULUS (PASS)' : 'TIDAK LULUS (FAIL)'}</span></p>
+              <p>Tanggal Test: ${studentInfo.date}</p>
+            </div>
+          </div>
+
+          <div style="font-family: 'Times New Roman', Times, serif; font-size: 12px; margin-top: 25px; color: #000;">
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 25px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1.5px solid #000;">
+                <div style="text-align: center;"><span style="display:block; font-size: 8px; font-weight: bold; color: #444; text-transform: uppercase;">Benar</span><span style="font-size: 18px; font-weight: 900;">${studentInfo.correct}</span></div>
+                <div style="text-align: center;"><span style="display:block; font-size: 8px; font-weight: bold; color: #444; text-transform: uppercase;">Salah</span><span style="font-size: 18px; font-weight: 900;">${studentInfo.wrong}</span></div>
+                <div style="text-align: center;"><span style="display:block; font-size: 8px; font-weight: bold; color: #444; text-transform: uppercase;">Kosong</span><span style="font-size: 18px; font-weight: 900;">${studentInfo.empty || 0}</span></div>
+                <div style="text-align: center;"><span style="display:block; font-size: 8px; font-weight: bold; color: #444; text-transform: uppercase;">Durasi</span><span style="font-size: 14px; font-weight: 900; line-height: 2;">${studentInfo.duration}</span></div>
+            </div>
+
+            <h3 style="text-decoration: underline; margin-bottom: 20px; font-size: 14px; text-transform: uppercase; font-weight: 900;">RINCIAN JAWABAN PER NOMOR</h3>
+            
+            ${reviewQuestions.map((q, idx) => `
+                <div style="margin-bottom: 18px; border-bottom: 1px dotted #999; padding-bottom: 12px; page-break-inside: avoid;">
+                    <div style="display: flex; gap: 10px;">
+                        <span style="font-weight: bold; width: 25px; shrink: 0;">${idx + 1}.</span>
+                        <div style="flex: 1;">
+                            <div style="margin-bottom: 8px; font-weight: 500;">${q.question}</div>
+                            <div style="font-size: 10px; padding: 8px; background: #f9fafb; border-left: 3px solid ${q.isCorrect ? '#059669' : '#dc2626'};">
+                                <span style="font-weight: bold;">JAWABAN PESERTA:</span> 
+                                <span style="color: ${q.isCorrect ? '#059669' : '#dc2626'}; font-weight: bold;">[${q.studentChoice || 'TIDAK DIJAWAB'}]</span>
+                                <span style="margin: 0 10px; color: #ccc;">|</span>
+                                <span style="font-weight: bold;">KUNCI:</span> ${q.correctChoice || q.correctChoices?.join(', ') || '-'}
+                                <span style="margin: 0 10px; color: #ccc;">|</span>
+                                <span style="font-weight: bold;">HASIL:</span> 
+                                <span style="color: ${q.isCorrect ? '#059669' : '#dc2626'}; font-weight: bold;">${q.isCorrect ? 'BENAR' : 'SALAH'}</span>
+                                <span style="margin-left: 10px; font-weight: bold; color: #444;">(Poin: ${q.points})</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+          </div>
+
+          <div class="footer-sign" style="margin-top: 60px;">
+            <div class="sign-box">
+                <p>Mengetahui,</p>
+                <p>Admin CBT System</p>
+                <div class="sign-space" style="height: 65px;"></div>
+                <div class="sign-line" style="width: 200px; border-bottom: 1.5px solid #000; margin: 0 auto;"></div>
+                <p style="font-size: 8px; margin-top: 5px; font-style: italic;">Dicetak pada ${new Date().toLocaleString('id-ID')}</p>
+            </div>
+          </div>
+        `;
+
+        import('../../utils/printReport').then(m => {
+            m.printReport(`Hasil_${studentInfo.name}`, html);
+        });
+    };
 
     if (isLoadingInitial) {
         return (

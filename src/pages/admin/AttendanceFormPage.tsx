@@ -59,36 +59,89 @@ const AttendanceFormPage: React.FC = () => {
         }
     };
 
-    const handlePrint = () => window.print();
+    const handlePrint = () => {
+        const examData = exams.find(e => e.id === parseInt(selectedExam));
+        const groupData = groups.find(g => g.id === parseInt(selectedGroup));
 
-    const selectedExamData = exams.find(e => e.id === parseInt(selectedExam));
-    const selectedGroupData = groups.find(g => g.id === parseInt(selectedGroup));
+        const html = `
+          <div class="header">
+            ${logo ? `<img src="${logo}" alt="Logo" />` : '<div class="header-spacer"></div>'}
+            <div class="header-text">
+                <h1>${institution?.name || 'INSTITUSI PENDIDIKAN'}</h1>
+                <p>${institution?.address1 || ''} ${institution?.address2 || ''}</p>
+                <p style="font-style: italic; font-size: 8px;">${institution?.address3 || ''}</p>
+            </div>
+            <div class="header-spacer"></div>
+          </div>
+
+          <div class="title-area">
+            <h2>DAFTAR HADIR PESERTA UJIAN</h2>
+            <p style="font-size: 11px; font-weight: bold; margin-top: 5px;">TAHUN PELAJARAN 2026/2027</p>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 150px 10px 1fr; gap: 5px; margin-bottom: 25px; font-weight: bold; border: 1px solid #eee; padding: 15px; border-radius: 8px;">
+            <span>Mata Pelajaran</span><span>:</span><span class="uppercase">${examData?.name || '-'}</span>
+            <span>Kelas / Group</span><span>:</span><span class="uppercase">${groupData?.name || '-'}</span>
+            <span>Hari / Tanggal</span><span>:</span><span>${examData ? new Date(examData.startTime).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '-'}</span>
+            <span>Ruang / Sesi</span><span>:</span><span style="border-bottom: 1px dashed #000; width: 250px;"> .....................................................</span>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px" class="text-center">No</th>
+                <th style="width: 140px" class="text-center">No. Peserta</th>
+                <th>Nama Lengkap Peserta</th>
+                <th style="width: 300px" class="text-center">Tanda Tangan</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${students.map((student, idx) => `
+                <tr>
+                  <td class="text-center font-bold">${idx + 1}</td>
+                  <td class="text-center font-bold" style="font-family: monospace">${student.username}</td>
+                  <td class="uppercase font-bold">${student.fullName}</td>
+                  <td style="height: 50px; position: relative;">
+                    <span style="font-size: 10px; position: absolute; left: 8px; top: 8px; font-weight: bold;">${idx + 1}.</span>
+                    <div style="width: 50%; height: 100%; ${idx % 2 === 0 ? 'margin-right: auto' : 'margin-left: auto'}; border-bottom: 1px dotted #ccc;"></div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="footer-sign" style="display: flex; justify-content: space-around; margin-top: 60px;">
+            <div class="sign-box">
+              <p>Pengawas 1,</p>
+              <div class="sign-space"></div>
+              <div class="sign-line" style="width: 220px; border-bottom: 1.5px solid #000; margin: 0 auto;"></div>
+              <p style="font-size: 9px; margin-top: 5px;">NIP. ..............................</p>
+            </div>
+            <div class="sign-box">
+              <p>Pengawas 2,</p>
+              <div class="sign-space"></div>
+              <div class="sign-line" style="width: 220px; border-bottom: 1.5px solid #000; margin: 0 auto;"></div>
+              <p style="font-size: 9px; margin-top: 5px;">NIP. ..............................</p>
+            </div>
+          </div>
+        `;
+
+        import('../../utils/printReport').then(m => {
+            m.printReport(`Daftar_Hadir_${groupData?.name || 'Siswa'}`, html);
+        });
+    };
+
+    if (isLoading) {
+        return (
+            <div className="min-h-[400px] flex flex-col items-center justify-center">
+                <Loader2 className="w-10 h-10 text-emerald-600 animate-spin mb-4" />
+                <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Menyiapkan Absensi...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 pb-20">
-            <style>{`
-                @media print {
-                    @page { 
-                        margin: 1.5cm;
-                        size: A4;
-                    }
-                    body * { visibility: hidden; }
-                    .print-area, .print-area * { visibility: visible; }
-                    .print-area {
-                        position: absolute;
-                        left: 0;
-                        top: 0;
-                        width: 100%;
-                        display: block !important;
-                    }
-                    .no-print { display: none !important; }
-                    table { width: 100%; border-collapse: collapse; }
-                    th, td { border: 1px solid black !important; padding: 8px !important; color: black !important; }
-                    .signature-cell { height: 45px; position: relative; }
-                    .signature-num { font-size: 10px; position: absolute; left: 4px; top: 4px; }
-                }
-            `}</style>
-
             {/* Header Screen Only */}
             <div className="no-print flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -150,79 +203,6 @@ const AttendanceFormPage: React.FC = () => {
                             {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                             Tampilkan
                         </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Print Content Area */}
-            <div className={`print-area ${students.length === 0 ? 'hidden' : 'block'}`}>
-                {/* Header Formal Dinamis */}
-                <div className="border-b-4 border-black pb-4 mb-6 flex items-center gap-6">
-                    <div className="w-20 h-20 bg-white flex items-center justify-center rounded border-black border overflow-hidden shrink-0">
-                        {logo ? (
-                            <img src={logo} alt="Logo" className="w-full h-full object-contain p-1" />
-                        ) : (
-                            <Building2 className="w-10 h-10 text-slate-200" />
-                        )}
-                    </div>
-                    <div className="flex-1 text-center font-serif text-black pr-20">
-                        <h1 className="text-lg font-bold uppercase leading-tight">YAYASAN / PEMERINTAH DAERAH</h1>
-                        <h2 className="text-2xl font-black uppercase leading-tight">{institution?.name || 'SMK MA\'ARIF NU BANYUPUTIH'}</h2>
-                        <p className="text-xs mt-1 font-bold">
-                            {institution?.address1} {institution?.address2} {institution?.address3}
-                        </p>
-                    </div>
-                </div>
-
-                <div className="text-center mb-8">
-                    <h3 className="text-lg font-bold uppercase underline decoration-2 underline-offset-4">DAFTAR HADIR PESERTA UJIAN</h3>
-                    <p className="text-sm font-bold mt-2">TAHUN PELAJARAN 2026/2027</p>
-                </div>
-
-                {/* Identity Info */}
-                <div className="grid grid-cols-[120px_max-content_1fr] md:grid-cols-[150px_max-content_1fr] gap-x-3 gap-y-1 mb-6 text-[13px] text-black font-semibold">
-                    <span>Mata Pelajaran</span><span>:</span><span>{selectedExamData?.name || '-'}</span>
-                    <span>Kelas / Group</span><span>:</span><span>{selectedGroupData?.name || '-'}</span>
-                    <span>Hari / Tanggal</span><span>:</span><span>{selectedExamData ? new Date(selectedExamData.startTime).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '-'}</span>
-                    <span>Ruang</span><span>:</span><span className="border-b border-black border-dashed min-w-[200px]">.............................................................</span>
-                </div>
-
-                {/* Main Attendance Table */}
-                <table className="w-full text-black">
-                    <thead>
-                        <tr className="bg-slate-100">
-                            <th className="w-12 text-center text-xs font-bold py-3 uppercase">No</th>
-                            <th className="w-32 text-center text-xs font-bold py-3 uppercase">No. Peserta</th>
-                            <th className="text-left text-xs font-bold px-4 py-3 uppercase">Nama Lengkap Peserta</th>
-                            <th className="w-64 text-center text-xs font-bold py-3 uppercase">Tanda Tangan</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {students.map((student, idx) => (
-                            <tr key={student.id}>
-                                <td className="text-center font-bold">{idx + 1}</td>
-                                <td className="text-center font-mono font-bold">{student.username}</td>
-                                <td className="px-4 font-bold uppercase text-sm">{student.fullName}</td>
-                                <td className="signature-cell">
-                                    <span className="signature-num">{idx + 1}.</span>
-                                    <div className={`w-1/2 h-full flex items-center justify-center ${idx % 2 === 0 ? 'mr-auto' : 'ml-auto'}`}>
-                                        <span className="text-[10px] text-slate-300"></span>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-
-                {/* Footer Signature */}
-                <div className="mt-12 flex justify-between px-10 text-black">
-                    <div className="text-center space-y-20">
-                        <p className="text-sm font-bold">Pengawas 1,</p>
-                        <p className="text-sm font-bold border-t border-black pt-1 min-w-[180px]">( ............................................ )</p>
-                    </div>
-                    <div className="text-center space-y-20">
-                        <p className="text-sm font-bold">Pengawas 2,</p>
-                        <p className="text-sm font-bold border-t border-black pt-1 min-w-[180px]">( ............................................ )</p>
                     </div>
                 </div>
             </div>

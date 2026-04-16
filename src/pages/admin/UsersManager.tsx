@@ -12,7 +12,9 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -50,6 +52,8 @@ const UsersManager: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState<number | 'all'>(50);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortConfig, setSortConfig] = useState<{ key: keyof User | 'groupName'; direction: 'asc' | 'desc' } | null>({ key: 'id', direction: 'desc' });
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -65,6 +69,10 @@ const UsersManager: React.FC = () => {
     const gid = searchParams.get('groupId');
     if (gid) setSelectedGroupId(gid);
   }, [searchParams]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedGroupId, itemsPerPage]);
 
   const showNotif = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ show: true, message, type });
@@ -106,7 +114,7 @@ const UsersManager: React.FC = () => {
     setEditingUser(user);
     setForm({
       username: user.username,
-      password: '',            // Kosongkan, hanya diupdate jika diisi
+      password: '',
       fullName: user.fullName,
       levelInt: user.levelInt,
       groupId: String(user.group?.id || ''),
@@ -182,12 +190,52 @@ const UsersManager: React.FC = () => {
     }
   };
 
-  const filteredUsers = users.filter(u =>
+  const requestSort = (key: keyof User | 'groupName') => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedUsers = React.useMemo(() => {
+    let sortableItems = [...users];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        let aVal: any;
+        let bVal: any;
+
+        if (sortConfig.key === 'groupName') {
+            aVal = a.group?.name || '';
+            bVal = b.group?.name || '';
+        } else {
+            aVal = a[sortConfig.key];
+            bVal = b[sortConfig.key];
+        }
+
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [users, sortConfig]);
+
+  const filteredUsers = sortedUsers.filter(u =>
     u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const paginatedUsers = itemsPerPage === 'all' ? filteredUsers : filteredUsers.slice(0, itemsPerPage);
+  const totalItems = filteredUsers.length;
+  const totalPages = itemsPerPage === 'all' ? 1 : Math.ceil(totalItems / (itemsPerPage as number));
+  const paginatedUsers = itemsPerPage === 'all' 
+    ? filteredUsers 
+    : filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * (itemsPerPage as number));
+
+  const SortIndicator = ({ column }: { column: keyof User | 'groupName' }) => {
+    if (sortConfig?.key !== column) return <ChevronDown className="ml-1 w-3 h-3 text-slate-300 opacity-20 group-hover:opacity-100" />;
+    return sortConfig.direction === 'asc' ? <ChevronDown className="ml-1 w-3 h-3 text-indigo-600 rotate-180" /> : <ChevronDown className="ml-1 w-3 h-3 text-indigo-600" />;
+  };
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -378,7 +426,6 @@ const UsersManager: React.FC = () => {
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
            </div>
-           {/* Items Per Page Selector */}
            <div className="w-40 relative">
               <select 
                 value={itemsPerPage === 'all' ? 'all' : itemsPerPage}
@@ -388,6 +435,7 @@ const UsersManager: React.FC = () => {
                 <option value="10">Limit: 10</option>
                 <option value="25">Limit: 25</option>
                 <option value="50">Limit: 50</option>
+                <option value="100">Limit: 100</option>
                 <option value="all">Semua</option>
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -414,17 +462,47 @@ const UsersManager: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-[13px]">
             <thead className="bg-[#f8fafc] border-b border-slate-200">
-              <tr>
+              <tr className="select-none">
                 <th className="px-4 py-4 w-12 text-center">
                    <input type="checkbox" className="rounded border-slate-300" />
                 </th>
-                <th className="px-2 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider text-center w-10">#</th>
-                <th className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider">User</th>
+                <th 
+                  className="px-2 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider text-center w-14 cursor-pointer hover:bg-slate-100/50 group"
+                  onClick={() => requestSort('id')}
+                >
+                  <div className="flex items-center justify-center"># <SortIndicator column="id" /></div>
+                </th>
+                <th 
+                  className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 group"
+                  onClick={() => requestSort('username')}
+                >
+                  <div className="flex items-center">Username <SortIndicator column="username" /></div>
+                </th>
                 <th className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider">Password</th>
-                <th className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider">Nama</th>
-                <th className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider text-center">Level</th>
-                <th className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider text-center">Tanggal Registrasi</th>
-                <th className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider">Group</th>
+                <th 
+                  className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 group"
+                  onClick={() => requestSort('fullName')}
+                >
+                  <div className="flex items-center">Nama Lengkap <SortIndicator column="fullName" /></div>
+                </th>
+                <th 
+                  className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider text-center cursor-pointer hover:bg-slate-100/50 group"
+                  onClick={() => requestSort('levelInt')}
+                >
+                  <div className="flex items-center justify-center">Level <SortIndicator column="levelInt" /></div>
+                </th>
+                <th 
+                  className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider text-center cursor-pointer hover:bg-slate-100/50 group"
+                  onClick={() => requestSort('createdAt')}
+                >
+                  <div className="flex items-center justify-center">Registrasi <SortIndicator column="createdAt" /></div>
+                </th>
+                <th 
+                  className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 group"
+                  onClick={() => requestSort('groupName')}
+                >
+                  <div className="flex items-center">Group <SortIndicator column="groupName" /></div>
+                </th>
                 <th className="px-4 py-4 font-black text-rose-500 text-[11px] uppercase tracking-wider text-right">Aksi</th>
               </tr>
             </thead>
@@ -442,20 +520,24 @@ const UsersManager: React.FC = () => {
 
               {!isLoading && paginatedUsers.map((u, idx) => {
                 const { date, time } = formatDate(u.createdAt);
+                const displayIndex = itemsPerPage === 'all' 
+                  ? idx + 1 
+                  : (currentPage - 1) * itemsPerPage + idx + 1;
+                  
                 return (
                   <tr key={u.id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="px-4 py-4 text-center">
                        <input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                     </td>
-                    <td className="px-2 py-4 text-center font-black text-slate-800">{idx + 1}</td>
-                    <td className="px-4 py-4 text-blue-600 font-medium hover:underline cursor-pointer">{u.username}</td>
-                    <td className="px-4 py-4 text-slate-500 font-mono tracking-tighter">{u.password?.substring(0, 10)}*</td>
+                    <td className="px-2 py-4 text-center font-black text-slate-800">{displayIndex}</td>
+                    <td className="px-4 py-4 text-blue-600 font-bold hover:underline cursor-pointer">{u.username}</td>
+                    <td className="px-4 py-4 text-slate-500 font-mono tracking-tighter text-[11px]">{u.password}</td>
                     <td className="px-4 py-4 font-bold text-slate-700 uppercase">{u.fullName}</td>
                     <td className="px-4 py-4 text-center">
                        {(() => {
                          const levelMap: Record<number, { label: string; color: string }> = {
                            0:  { label: '🔒 Terkunci', color: 'bg-slate-700' },
-                           1:  { label: '1 · Siswa',    color: 'bg-blue-500' },
+                           1:  { label: '1 · Siswa',    color: 'bg-indigo-500' },
                            4:  { label: '4 · Ortu',     color: 'bg-purple-500' },
                            5:  { label: '5 · Pengawas', color: 'bg-cyan-600' },
                            6:  { label: '6 · Panitia',  color: 'bg-amber-500' },
@@ -464,25 +546,23 @@ const UsersManager: React.FC = () => {
                          };
                          const lv = levelMap[u.levelInt] ?? { label: String(u.levelInt), color: 'bg-slate-500' };
                          return (
-                           <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded font-black text-white text-[10px] ${lv.color}`}>
+                           <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded font-black text-white text-[9px] ${lv.color}`}>
                              {lv.label}
                            </span>
                          );
                        })()}
                     </td>
                     <td className="px-4 py-4 text-center leading-tight">
-                       <div className="text-slate-500 font-medium">{date}</div>
-                       <div className="text-[10px] text-slate-400 font-bold">{time}</div>
+                       <div className="text-slate-500 font-bold text-[11px]">{date}</div>
+                       <div className="text-[9px] text-slate-400 font-bold">{time}</div>
                     </td>
                     <td className="px-4 py-4">
-                       <div className="flex flex-wrap gap-1">
-                          <span className="bg-[#5c72b2] text-white px-2 py-0.5 rounded text-[10px] font-black uppercase">
-                             {u.group?.name || 'DEFAULT'}
-                          </span>
-                       </div>
+                       <span className="bg-[#5c72b2]/10 text-[#5c72b2] px-2 py-0.5 rounded text-[10px] font-black uppercase border border-[#5c72b2]/20">
+                          {u.group?.name || 'DEFAULT'}
+                       </span>
                     </td>
                     <td className="px-4 py-4 text-right">
-                       <div className="flex items-center justify-end gap-1">
+                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button 
                             title="Edit Pengguna"
                             onClick={() => openEdit(u)}
@@ -513,6 +593,58 @@ const UsersManager: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* --- Pagination Controls --- */}
+        {!isLoading && itemsPerPage !== 'all' && totalItems > 0 && (
+          <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
+             <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                Menampilkan <span className="text-slate-900">{(currentPage - 1) * (itemsPerPage as number) + 1}</span> sampai <span className="text-slate-900">{Math.min(currentPage * (itemsPerPage as number), totalItems)}</span> dari <span className="text-slate-900">{totalItems}</span> User
+             </div>
+             
+             <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-all shadow-sm"
+                >
+                   <ChevronLeft className="w-4 h-4" />
+                </button>
+                
+                <div className="flex items-center gap-1 mx-2">
+                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      // Logic to show pages around current page
+                      let pageNum = currentPage;
+                      if (totalPages <= 5) pageNum = i + 1;
+                      else if (currentPage <= 3) pageNum = i + 1;
+                      else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                      else pageNum = currentPage - 2 + i;
+
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`w-8 h-8 rounded-lg text-xs font-black transition-all border ${
+                            currentPage === pageNum 
+                              ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' 
+                              : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                   })}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="p-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-all shadow-sm"
+                >
+                   <ChevronRight className="w-4 h-4" />
+                </button>
+             </div>
+          </div>
+        )}
       </div>
     </div>
   );

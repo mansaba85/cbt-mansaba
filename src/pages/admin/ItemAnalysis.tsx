@@ -8,7 +8,8 @@ import {
   CheckCircle2,
   XCircle,
   HelpCircle,
-  FileText
+  FileText,
+  Printer
 } from 'lucide-react';
 
 interface AnalysisItem {
@@ -35,6 +36,8 @@ const ItemAnalysis: React.FC = () => {
   const [exams, setExams] = useState<any[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string>('');
   const [data, setData] = useState<AnalysisData | null>(null);
+  const [institution, setInstitution] = useState<any>(null);
+  const [logo, setLogo] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -42,6 +45,13 @@ const ItemAnalysis: React.FC = () => {
     fetch('http://localhost:3001/api/exams')
       .then(res => res.json())
       .then(setExams);
+    
+    fetch('http://localhost:3001/api/settings')
+      .then(res => res.json())
+      .then(settings => {
+        if (settings.cbt_institution_settings) setInstitution(settings.cbt_institution_settings);
+        if (settings.cbt_logo_preview) setLogo(settings.cbt_logo_preview);
+      });
   }, []);
 
   const handleFetchAnalysis = async () => {
@@ -64,8 +74,79 @@ const ItemAnalysis: React.FC = () => {
     return 'bg-blue-100 text-blue-700 border-blue-200';
   };
 
+  const handlePrint = () => {
+    if (!data) return;
+
+    const html = `
+      <div class="header">
+        ${logo ? `<img src="${logo}" alt="Logo" />` : '<div class="header-spacer"></div>'}
+        <div class="header-text">
+            <h1>${institution?.name || 'ANALISIS BUTIR SOAL'}</h1>
+            <p>${institution?.address1 || ''} ${institution?.address2 || ''}</p>
+            <p style="font-style: italic; font-size: 8px;">${institution?.address3 || ''}</p>
+        </div>
+        <div class="header-spacer"></div>
+      </div>
+
+      <div class="title-area">
+        <h2>LAPORAN ANALISIS TINGKAT KESUKARAN DAN DAYA PEMBERDA</h2>
+      </div>
+
+      <div class="meta-grid">
+        <div>
+          <p>Nama Ujian: ${data.examTitle}</p>
+          <p>Total Peserta: ${data.totalStudents} Siswa</p>
+        </div>
+        <div class="meta-right">
+          <p>Total Soal: ${data.analysis.length} Butir</p>
+          <p>Tanggal Cetak: ${new Date().toLocaleString('id-ID')}</p>
+        </div>
+      </div>
+
+      <table style="font-size: 9px;">
+        <thead>
+          <tr>
+            <th style="width: 30px" class="text-center">No</th>
+            <th>Butir Soal (Cuplikan)</th>
+            <th style="width: 80px" class="text-center">Indeks Kesukaran (P)</th>
+            <th style="width: 100px" class="text-center">Keterangan (P)</th>
+            <th style="width: 80px" class="text-center">Daya Pembeda (D)</th>
+            <th style="width: 120px" class="text-center">Keterangan (D)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.analysis.map((item, idx) => `
+            <tr>
+              <td class="text-center">${idx + 1}</td>
+              <td style="color: #444;">${item.content.replace(/<[^>]*>?/gm, '').substring(0, 160)}...</td>
+              <td class="text-center font-bold">${item.diffIdx}</td>
+              <td class="text-center uppercase" style="font-size: 8px; font-weight: bold;">${item.diffLabel}</td>
+              <td class="text-center font-bold">${item.discIdx}</td>
+              <td class="text-center uppercase" style="font-size: 8px; font-weight: bold;">${item.discLabel}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+
+      <div class="footer-sign">
+        <div class="sign-box">
+          <p>Dicetak Oleh,</p>
+          <p>Admin CBT System</p>
+          <div class="sign-space"></div>
+          <div class="sign-line"></div>
+          <p style="font-size: 9px; margin-top: 5px; font-style: italic;">NIP. ..............................</p>
+        </div>
+      </div>
+    `;
+
+    import('../../utils/printReport').then(m => {
+        m.printReport(`Analisis_Soal_${data.examTitle}`, html);
+    });
+  };
+
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-500">
+      <div className="no-print space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="p-2 bg-indigo-600 rounded text-white shadow-lg shadow-indigo-100">
@@ -89,7 +170,7 @@ const ItemAnalysis: React.FC = () => {
             >
               <option value="">-- Pilih Ujian --</option>
               {exams.map(e => (
-                <option key={e.id} value={e.id}>{e.title}</option>
+                <option key={e.id} value={e.id}>{e.name}</option>
               ))}
             </select>
             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -102,6 +183,14 @@ const ItemAnalysis: React.FC = () => {
         >
           {isLoading ? 'Memproses...' : <><Search className="w-4 h-4" /> Proses Analisis</>}
         </button>
+        {data && (
+          <button 
+            onClick={handlePrint}
+            className="h-12 px-6 bg-slate-900 text-white rounded-2xl font-black text-sm uppercase tracking-wider flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-slate-100"
+          >
+            <Printer className="w-4 h-4" /> Cetak
+          </button>
+        )}
       </div>
 
       {data && (
@@ -253,6 +342,7 @@ const ItemAnalysis: React.FC = () => {
           <p className="text-slate-400 font-bold">Silakan pilih ujian dan klik tombol Proses untuk memulai analisis</p>
         </div>
       )}
+      </div>
     </div>
   );
 };

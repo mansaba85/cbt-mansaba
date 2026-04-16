@@ -150,9 +150,10 @@ model ExamResult {
   status      String    @default("COMPLETED")
   ipAddress   String?
   userAgent   String?
-  startedAt   DateTime  @default(now())
-  finishedAt  DateTime?
-  exam        Exam      @relation(fields: [examId], references: [id])
+  startedAt        DateTime  @default(now())
+  finishedAt       DateTime?
+  remainingSeconds Int?
+  exam             Exam      @relation(fields: [examId], references: [id])
   user        User      @relation(fields: [userId], references: [id])
 
   @@index([examId], map: "exam_results_examId_fkey")

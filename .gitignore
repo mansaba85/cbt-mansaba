@@ -27,3 +27,5 @@ uploads/
 *.sw?
 
 /src/generated/prisma
+backups/
+scratch/

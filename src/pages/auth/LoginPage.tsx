@@ -48,9 +48,10 @@ const LoginPage: React.FC = () => {
 
     // Check for suspended error from URL
     const params = new URLSearchParams(window.location.search);
-    if (params.get('error') === 'suspended') {
-        setErrorText('AKUN TERKUNCI! Sesi Anda dihentikan paksa karena pelanggaran aturan. Silakan hubungi proktor.');
-    } else if (params.get('error') === 'multi_login') {
+    const reason = params.get('reason') || params.get('error');
+    if (reason === 'suspended') {
+        setErrorText('AKUN TERKUNCI! Sesi Anda dihentikan paksa karena pelanggaran aturan (kecurangan) atau tindakan Proktor. Silakan hubungi proktor untuk membuka akses.');
+    } else if (reason === 'multi_login') {
         setErrorText('SESI BERAKHIR! Akun Anda baru saja login di perangkat/browser lain. Satu akun hanya boleh aktif di satu tempat.');
     }
   }, [navigate]);

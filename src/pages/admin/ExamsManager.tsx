@@ -391,6 +391,10 @@ const ExamsManager: React.FC = () => {
                            <input type="checkbox" checked={formData.showMenu} onChange={(e) => setFormData({...formData, showMenu: e.target.checked})} />
                            <span className="text-[11px] font-bold text-slate-600">Menu Soal</span>
                         </label>
+                        <label className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer">
+                           <input type="checkbox" checked={formData.showResultToUser} onChange={(e) => setFormData({...formData, showResultToUser: e.target.checked})} />
+                           <span className="text-[11px] font-bold text-slate-600">Tampilkan Skor</span>
+                        </label>
                     </div>
                   </div>
                </div>

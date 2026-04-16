@@ -23,9 +23,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ isAdminView = false
 
   useEffect(() => {
     const user = localStorage.getItem('cbt_user');
-    if (user) {
-      const data = JSON.parse(user);
-      if (data.fullName) setStudentName(data.fullName);
+    if (user && user !== 'undefined') {
+      try {
+        const data = JSON.parse(user);
+        if (data.fullName) setStudentName(data.fullName);
+      } catch (e) { console.error("Session corrupt"); }
     }
   }, []);
 
@@ -35,29 +37,30 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ isAdminView = false
       setIsLoading(true);
       try {
         if (isAdminView) {
-          // ADMIN: Ambil daftar TOPIK/SUBJECT asli dari database
           const res = await fetch('http://localhost:3001/api/subjects');
           const data = await res.json();
-          // Map data agar sesuai dengan format tampilan kartu (Card)
-          setItems(data.map((s: any) => ({
+          setItems(Array.isArray(data) ? data.map((s: any) => ({
             id: s.id,
             name: s.name,
             subject: s.module?.name || 'Materi',
-            duration: 60, // Default simulasi
+            duration: 60,
             totalQuestions: s._count?.questions || 0,
             status: 'available'
-          })));
+          })) : []);
         } else {
-          // SISWA: Ambil daftar UJIAN AKTIF dari database
           const userJson = localStorage.getItem('cbt_user');
-          const userId = userJson ? JSON.parse(userJson).id : '0';
+          let userId = '0';
+          if (userJson && userJson !== 'undefined') {
+            try { userId = JSON.parse(userJson).id || '0'; } catch(e){}
+          }
           
           const res = await fetch(`http://localhost:3001/api/exams/active?userId=${userId}`);
           const data = await res.json();
-          setItems(data);
+          setItems(Array.isArray(data) ? data : []);
         }
       } catch (err) {
         console.error("Gagal mengambil data:", err);
+        setItems([]);
       } finally {
         setIsLoading(false);
       }
