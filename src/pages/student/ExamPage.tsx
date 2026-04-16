@@ -401,7 +401,7 @@ const ExamPage: React.FC = () => {
         const res = await fetch(`http://localhost:3001/api/exams/${id}/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id })
+            body: JSON.stringify({ userId: user.id, answers: answersRef.current })
         });
         const data = await res.json();
         if (data.success) {

@@ -858,7 +858,7 @@ app.post('/api/exams/:id/save-progress', async (req, res) => {
 app.post('/api/exams/:id/submit', async (req, res) => {
     if (!prisma) return res.status(500).json({ success: false });
     const { id } = req.params;
-    const { userId, answers } = req.body;
+    let { userId, answers } = req.body;
 
     try {
         const exam = await prisma.exam.findUnique({
@@ -871,6 +871,15 @@ app.post('/api/exams/:id/submit', async (req, res) => {
             orderBy: { startedAt: 'desc' }
         });
         if (!result) return res.status(404).json({ success: false, error: 'Sesi tidak ditemukan atau sudah selesai' });
+        
+        // Fallback to database answers if not provided in body
+        if (!answers || Object.keys(answers).length === 0) {
+            answers = JSON.parse(result.answersJson || '{}');
+        }
+
+        if (!answers || Object.keys(answers).length === 0) {
+            return res.status(400).json({ success: false, error: 'Tidak ada jawaban yang dikirim atau tersimpan.' });
+        }
 
         // CALCULATE SCORE
         // 1. Get all questions that WERE part of this exam (based on rules)
