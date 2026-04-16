@@ -134,7 +134,7 @@ const ExamsManager: React.FC = () => {
       ...exam,
       startTime: formatDateTimeLocal(new Date(exam.startTime)),
       endTime: formatDateTimeLocal(new Date(exam.endTime)),
-      allowedGroupIds: exam.allowedGroups?.map((g: any) => g.id) || []
+      allowedGroupIds: exam.groups?.map((g: any) => g.id) || []
     });
     setTopicRules(exam.topicRules.map((r: any) => ({
       subjectId: r.subjectId.toString(),
@@ -542,7 +542,7 @@ const ExamsManager: React.FC = () => {
                       <div className="space-y-0.5">
                         <p className="text-xs font-black text-blue-600 uppercase truncate max-w-[150px]">{exam.name}</p>
                         <div className="flex flex-wrap gap-1">
-                          {exam.allowedGroups?.map((g: any) => (
+                          {exam.groups?.map((g: any) => (
                             <span key={g.id} className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[8px] font-black uppercase">{g.name}</span>
                           ))}
                         </div>

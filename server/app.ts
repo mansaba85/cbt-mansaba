@@ -1902,7 +1902,7 @@ app.post('/api/exams', async (req, res) => {
         ...examData,
         startTime: new Date(examData.startTime),
         endTime: new Date(examData.endTime),
-        allowedGroups: {
+        groups: {
           connect: (allowedGroupIds || []).map((id: number) => ({ id }))
         },
         topicRules: {
@@ -1938,7 +1938,7 @@ app.put('/api/exams/:id', async (req, res) => {
           ...examData,
           startTime: new Date(examData.startTime),
           endTime: new Date(examData.endTime),
-          allowedGroups: {
+          groups: {
             set: (allowedGroupIds || []).map((id: number) => ({ id }))
           }
         }
