@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { Menu, X, RefreshCw, Calendar as CalendarIcon } from 'lucide-react';
+import IdleTimer from '../auth/IdleTimer';
 
 const AdminLayout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-transparent font-sans">
+      {/* Auto logout after 2 hours of idle */}
+      <IdleTimer timeoutMinutes={120} />
       {/* Mobile Backdrop Overlay */}
       {isSidebarOpen && (
         <div 
