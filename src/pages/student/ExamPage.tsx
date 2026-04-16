@@ -401,14 +401,14 @@ const ExamPage: React.FC = () => {
         const res = await fetch(`http://localhost:3001/api/exams/${id}/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id, answers: answersRef.current })
+            body: JSON.stringify({ userId: user.id })
         });
         const data = await res.json();
         if (data.success) {
             toast.success("Ujian berhasil diselesaikan!");
             navigate('/student');
         } else {
-            toast.error(data.error || "Gagal mengirim jawaban");
+            toast.error(data.error || "Gagal menyelesaikan ujian");
         }
     } catch (e) {
         toast.error("Terjadi kesalahan saat mengakhiri ujian");
@@ -686,7 +686,7 @@ const ExamPage: React.FC = () => {
                   <h2 className="text-3xl font-black text-slate-800 mb-3 uppercase italic tracking-tighter">Selesaikan Ujian?</h2>
                   <p className="text-slate-400 font-medium mb-12 leading-relaxed">Seluruh jawaban akan disimpan secara permanen. Anda tidak dapat kembali setelah ini.</p>
                   <div className="flex flex-col gap-4">
-                      <button onClick={handleSubmitExam} className="w-full py-5 bg-emerald-500 text-white rounded-3xl font-black uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-emerald-600 hover:-translate-y-1 transition-all active:translate-y-0">Kirim Jawaban <ChevronRight className="w-4 h-4 ml-1 inline-block" /></button>
+                      <button onClick={handleSubmitExam} className="w-full py-5 bg-emerald-500 text-white rounded-3xl font-black uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-emerald-600 hover:-translate-y-1 transition-all active:translate-y-0">Ya, Saya Selesai <ChevronRight className="w-4 h-4 ml-1 inline-block" /></button>
                       <button onClick={() => setFinishModalOpen(false)} className="w-full py-5 bg-white text-slate-400 rounded-3xl font-bold hover:bg-slate-50 transition-all border border-slate-100">Cek Kembali</button>
                   </div>
               </div>
