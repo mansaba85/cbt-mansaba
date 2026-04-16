@@ -201,7 +201,7 @@ const LoginPage: React.FC = () => {
 
               <div className="mt-8 pt-8 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                  <p className="text-xs font-medium text-slate-400 text-center md:text-left">
-                    &copy; 2026 TCEXAM {siteName}.
+                    MANSABA CBT - MA NU 01 Banyuputih
                  </p>
                  <a href="#" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 text-center md:text-right hover:underline">
                     Hubungi Admin Sekolah

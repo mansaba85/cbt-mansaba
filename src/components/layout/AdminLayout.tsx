@@ -62,8 +62,17 @@ const AdminLayout: React.FC = () => {
         </header>
 
         {/* Page Content Holder */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-6 lg:px-10 pt-6 pb-20">
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-6 lg:px-10 pt-6">
           <Outlet />
+          
+          <footer className="mt-20 py-10 border-t border-slate-100 flex flex-col items-center md:flex-row justify-between gap-4">
+             <div className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                MANSABA CBT &bull; MA NU 01 Banyuputih
+             </div>
+             <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+                &copy; 2026 TCEXAM V2.0 System
+             </div>
+          </footer>
         </div>
       </main>
     </div>

@@ -27,6 +27,7 @@ import BackupRestore from './pages/admin/BackupRestore';
 import Proctoring from './pages/admin/Proctoring';
 import ParticipantCards from './pages/admin/ParticipantCards';
 import AttendanceFormPage from './pages/admin/AttendanceFormPage';
+import AdminProfile from './pages/admin/AdminProfile';
 import StudentLayout from './components/layout/StudentLayout';
 import StudentDashboard from './pages/student/StudentDashboard';
 import ExamPage from './pages/student/ExamPage';
@@ -140,6 +141,7 @@ function App() {
               <Route path="maintenance" element={<div className="p-8"><h1 className="text-2xl font-bold">Pemeliharaan</h1><p className="mt-4 text-slate-500">Segera hadir.</p></div>} />
               <Route path="settings/general" element={<GeneralSettings />} />
               <Route path="settings/backup" element={<BackupRestore />} />
+              <Route path="profile" element={<AdminProfile />} />
             </Route>
           </Route>
 

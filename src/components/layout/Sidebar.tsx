@@ -244,13 +244,23 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       {/* Profile & Logout Section */}
       <div className="p-4 border-t border-white/10 bg-black/20 backdrop-blur-md">
         <div className="flex items-center gap-3 p-2 rounded-2xl bg-white/5 border border-white/5 group transition-all">
-          <div className="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-800 flex items-center justify-center font-black text-white shadow-lg">
-            {adminName.charAt(0)}
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <p className="text-[12px] font-black tracking-tight text-slate-200 truncate">{adminName}</p>
-            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Super Admin</p>
-          </div>
+          {/* Profile Link Area */}
+          <button 
+            onClick={() => {
+              navigate('/admin/profile');
+              if (onClose) onClose();
+            }}
+            className="flex flex-1 items-center gap-3 text-left hover:bg-white/5 p-1 rounded-xl transition-all cursor-pointer"
+          >
+            <div className="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-800 flex items-center justify-center font-black text-white shadow-lg group-hover:scale-105 transition-transform">
+              {adminName.charAt(0)}
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-[12px] font-black tracking-tight text-slate-200 truncate group-hover:text-white transition-colors">{adminName}</p>
+              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Super Admin</p>
+            </div>
+          </button>
+
           <button 
             type="button"
             onClick={handleLogout}

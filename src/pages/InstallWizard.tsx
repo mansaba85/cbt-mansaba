@@ -11,13 +11,13 @@ export default function InstallWizard() {
     port: '3306',
     user: 'root',
     password: '',
-    dbname: 'cbt_modern',
+    dbname: 'cbtmansaba',
   });
 
   const [adminConfig, setAdminConfig] = useState({
     fullName: 'Administrator',
     username: 'admin',
-    password: '',
+    password: '1234',
   });
 
   const handleDbSetup = async (e: React.FormEvent) => {

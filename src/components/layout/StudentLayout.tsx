@@ -96,6 +96,25 @@ const StudentLayout: React.FC = () => {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <Outlet />
       </main>
+
+      {/* Professional Footer */}
+      <footer className="max-w-5xl mx-auto px-6 py-12 border-t border-slate-200">
+         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-3">
+               <div className="w-8 h-8 bg-slate-200 rounded-lg flex items-center justify-center">
+                  <Monitor className="w-4 h-4 text-slate-500" />
+               </div>
+               <span className="text-xs font-black text-slate-400 uppercase tracking-widest leading-none">
+                  MANSABA CBT<br/>
+                  <span className="text-[9px] font-bold text-slate-300">MA NU 01 Banyuputih</span>
+               </span>
+            </div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center md:text-right">
+               Developed for Excellence &copy; 2026<br/>
+               <span className="text-indigo-500">School Digitalization Program</span>
+            </div>
+         </div>
+      </footer>
     </div>
   );
 };

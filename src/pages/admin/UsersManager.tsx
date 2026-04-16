@@ -49,7 +49,7 @@ const UsersManager: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [itemsPerPage, setItemsPerPage] = useState<number | 'all'>(50);
+  const [itemsPerPage, setItemsPerPage] = useState<number | 'all'>(25);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -562,7 +562,7 @@ const UsersManager: React.FC = () => {
                        </span>
                     </td>
                     <td className="px-4 py-4 text-right">
-                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <div className="flex items-center justify-end gap-1 ">
                           <button 
                             title="Edit Pengguna"
                             onClick={() => openEdit(u)}

@@ -1784,6 +1784,87 @@ app.get('/api/exams/:id/attendance', async (req, res) => {
   }
 });
 
+app.get('/api/attendance/recap', async (req, res) => {
+  if (!prisma) return res.status(500).json({ error: 'Database context not found' });
+  const { examIds, groupId } = req.query;
+
+  if (!examIds) return res.status(400).json({ error: 'Parameter examIds wajib diisi' });
+  const ids = (examIds as string).split(',').map(id => parseInt(id));
+
+  try {
+    // 1. Get all selected exams
+    const exams = await prisma.exam.findMany({
+      where: { id: { in: ids } },
+      include: { groups: true },
+      orderBy: { startTime: 'asc' }
+    });
+
+    if (exams.length === 0) return res.status(404).json({ error: 'Ujian tidak ditemukan' });
+
+    // 2. Identify target groups and unique students
+    let targetGroupIds: number[] = [];
+    if (groupId) {
+        targetGroupIds = [parseInt(groupId as string)];
+    } else {
+        const groupSet = new Set<number>();
+        exams.forEach(e => e.groups.forEach(g => groupSet.add(g.id)));
+        targetGroupIds = Array.from(groupSet);
+    }
+
+    const students = await prisma.user.findMany({
+      where: { 
+        groupId: { in: targetGroupIds },
+        level: 'STUDENT'
+      },
+      include: { group: true },
+      orderBy: { fullName: 'asc' }
+    });
+
+    // 3. Get all results for these exams
+    const allResults = await prisma.examResult.findMany({
+      where: { examId: { in: ids } },
+      select: { userId: true, examId: true, status: true }
+    });
+
+    // 4. Build lookup map: Map<userId, Map<examId, status>>
+    const resultMap = new Map<number, Set<number>>();
+    allResults.forEach(r => {
+        if (!resultMap.has(r.userId)) resultMap.set(r.userId, new Set());
+        resultMap.get(r.userId)?.add(r.examId);
+    });
+
+    // 5. Format Data for the Matrix
+    const matrix = students.map(s => {
+        const attendance: Record<number, boolean> = {};
+        let missedCount = 0;
+        
+        exams.forEach(e => {
+            const wasPresent = resultMap.get(s.id)?.has(e.id) || false;
+            attendance[e.id] = wasPresent;
+            if (!wasPresent) missedCount++;
+        });
+
+        return {
+            id: s.id,
+            name: s.fullName,
+            username: s.username,
+            group: s.group?.name || '--',
+            attendance,
+            missedCount
+        };
+    });
+
+    res.json({
+        exams: exams.map(e => ({ id: e.id, name: e.name, date: e.startTime })),
+        matrix,
+        totalStudents: students.length
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menghasilkan rekap' });
+  }
+});
+
 app.delete('/api/results/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -1828,24 +1909,30 @@ app.put('/api/users/:id', async (req, res) => {
   const { id } = req.params;
   try {
     const data = req.body;
-    let levelInt = parseInt(data.levelInt || '1');
-    let level: any = 'STUDENT';
+    const updateData: any = {};
     
-    if (levelInt >= 10) level = 'ADMIN';
-    else if (levelInt >= 7) level = 'PROCTOR';
-    else if (levelInt >= 5) level = 'TEACHER';
+    if (data.username !== undefined) updateData.username = data.username;
+    if (data.fullName !== undefined) updateData.fullName = data.fullName;
+    if (data.password !== undefined && data.password !== '') updateData.password = data.password;
+    
+    if (data.levelInt !== undefined) {
+      const levelInt = parseInt(data.levelInt);
+      updateData.levelInt = levelInt;
+      if (levelInt >= 10) updateData.level = 'ADMIN';
+      else if (levelInt >= 7) updateData.level = 'PROCTOR';
+      else if (levelInt >= 5) updateData.level = 'TEACHER';
+      else updateData.level = 'STUDENT';
+    }
+
+    if (data.groupId !== undefined) {
+      updateData.groupId = data.groupId ? parseInt(data.groupId) : null;
+    }
 
     const user = await prisma.user.update({
       where: { id: parseInt(id) },
-      data: {
-        username: data.username,
-        password: data.password,
-        fullName: data.fullName,
-        level: level,
-        levelInt: levelInt,
-        groupId: data.groupId ? parseInt(data.groupId) : null,
-      }
+      data: updateData
     });
+    
     res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Gagal update user' });

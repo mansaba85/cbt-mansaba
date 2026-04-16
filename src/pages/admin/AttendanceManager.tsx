@@ -8,18 +8,27 @@ import {
   ChevronDown,
   Loader2,
   AlertCircle,
-  Printer
+  Printer,
+  FileSpreadsheet,
+  CheckCircle2,
+  XCircle,
+  LayoutGrid,
+  FileText
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const AttendanceManager: React.FC = () => {
+  const [activeMode, setActiveMode] = useState<'single' | 'recap'>('single');
   const [exams, setExams] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [selectedExam, setSelectedExam] = useState('');
+  const [selectedExams, setSelectedExams] = useState<string[]>([]);
   const [selectedGroup, setSelectedGroup] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [isLoadingInitial, setIsLoadingInitial] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [attendanceData, setAttendanceData] = useState<any>(null);
+  const [recapData, setRecapData] = useState<any>(null);
   const [institution, setInstitution] = useState<any>(null);
   const [logo, setLogo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,145 +59,127 @@ const AttendanceManager: React.FC = () => {
   }, []);
 
   const handleSearch = async () => {
-    if (!selectedExam) return;
-    
-    setIsFetching(true);
-    setShowResults(false);
-    setError(null);
-
-    try {
-        const params = new URLSearchParams();
-        if (selectedGroup) params.append('groupId', selectedGroup);
-        
-        const res = await fetch(`http://localhost:3001/api/exams/${selectedExam}/attendance?${params.toString()}`);
-        const data = await res.json();
-        
-        if (data.error) {
-            setError(data.error);
-        } else {
-            setAttendanceData(data);
-            setShowResults(true);
-        }
-    } catch (err) {
-        setError("Gagal menghubungi server");
-    } finally {
-        setIsFetching(false);
+    if (activeMode === 'single') {
+        if (!selectedExam) return;
+        setIsFetching(true);
+        setShowResults(false);
+        setError(null);
+        try {
+            const params = new URLSearchParams();
+            if (selectedGroup) params.append('groupId', selectedGroup);
+            const res = await fetch(`http://localhost:3001/api/exams/${selectedExam}/attendance?${params.toString()}`);
+            const data = await res.json();
+            if (data.error) setError(data.error);
+            else {
+                setAttendanceData(data);
+                setShowResults(true);
+            }
+        } catch (err) { setError("Gagal menghubungi server"); }
+        finally { setIsFetching(false); }
+    } else {
+        if (selectedExams.length === 0) return toast.warning("Pilih minimal 1 ujian untuk rekap");
+        setIsFetching(true);
+        setShowResults(false);
+        setError(null);
+        try {
+            const params = new URLSearchParams();
+            params.append('examIds', selectedExams.join(','));
+            if (selectedGroup) params.append('groupId', selectedGroup);
+            const res = await fetch(`http://localhost:3001/api/attendance/recap?${params.toString()}`);
+            const data = await res.json();
+            if (data.error) setError(data.error);
+            else {
+                setRecapData(data);
+                setShowResults(true);
+            }
+        } catch (err) { setError("Gagal menghubungi server"); }
+        finally { setIsFetching(false); }
     }
   };
 
-  const exportToExcel = () => {
-    if (!attendanceData || !attendanceData.absentStudents.length) return;
+  const toggleExamSelection = (id: string) => {
+    setSelectedExams(prev => 
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
 
-    // 1. Prepare Data
-    const data = attendanceData.absentStudents.map((student: any, index: number) => ({
-      'No': index + 1,
-      'ID Peserta': student.username,
-      'Nama Lengkap': student.name,
-      'Grup / Rombel': student.group,
-      'Status': 'TIDAK HADIR'
-    }));
+  const selectAllExams = () => {
+    setSelectedExams(exams.map(e => e.id.toString()));
+  };
 
-    // 2. Build XLSX
+  const deselectAllExams = () => {
+    setSelectedExams([]);
+  };
+
+  const [onlyAbsentees, setOnlyAbsentees] = useState(false);
+
+  const exportRecapToExcel = () => {
+    if (!recapData) return;
     const XLSX = (window as any).XLSX;
-    if (!XLSX) {
-        console.error("Library XLSX tidak ditemukan");
-        return;
-    }
+    if (!XLSX) return toast.error("Library XLSX tidak ditemukan");
+
+    // Prepare Headers
+    const headers = ['No', 'ID Peserta', 'Nama Lengkap', 'Grup'];
+    recapData.exams.forEach((e: any) => headers.push(e.name));
+    headers.push('Total Absen');
+
+    // Prepare Rows
+    const rows = recapData.matrix.map((s: any, i: number) => {
+        const rowData: any[] = [i + 1, s.username, s.name, s.group];
+        recapData.exams.forEach((e: any) => {
+            rowData.push(s.attendance[e.id] ? 'HADIR' : 'ABSEN');
+        });
+        rowData.push(s.missedCount);
+        return rowData;
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Rekap_Kehadiran");
+    XLSX.writeFile(wb, `Rekap_Kehadiran_Multi_Mapel.xlsx`);
+  };
+
+  const exportSingleToExcel = () => {
+    if (!attendanceData || !attendanceData.absentStudents.length) return;
+    const data = attendanceData.absentStudents.map((student: any, index: number) => ({
+      'No': index + 1, 'ID Peserta': student.username, 'Nama Lengkap': student.name, 'Grup / Rombel': student.group, 'Status': 'TIDAK HADIR'
+    }));
+    const XLSX = (window as any).XLSX;
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Daftar Absen");
-
-    // Fix column widths
-    ws['!cols'] = [
-        { wch: 5 },  { wch: 15 }, { wch: 40 }, { wch: 20 }, { wch: 15 }
-    ];
-
     XLSX.writeFile(wb, `Data_Absen_${attendanceData.examName.replace(/ /g, '_')}.xlsx`);
   };
 
-  const handlePrint = () => {
+  const handlePrintSingle = () => {
     if (!attendanceData) return;
-
     const groupName = selectedGroup ? groups.find(g => g.id.toString() === selectedGroup)?.name : 'Semua Grup';
-
     const html = `
       <div class="header">
         ${logo ? `<img src="${logo}" alt="Logo" />` : '<div class="header-spacer"></div>'}
         <div class="header-text">
             <h1>${institution?.name || 'DAFTAR KEHADIRAN'}</h1>
             <p>${institution?.address1 || ''} ${institution?.address2 || ''}</p>
-            <p style="font-style: italic; font-size: 8px;">${institution?.address3 || ''}</p>
         </div>
         <div class="header-spacer"></div>
       </div>
-
       <div class="title-area">
-        <h2>REKAPITULASI KEHADIRAN PESERTA UJIAN (CBT)</h2>
-        <p style="font-size: 11px; font-weight: bold; margin-top: 2px;">NOMOR DOKUMEN: ATT-${new Date().getFullYear()}/${selectedExam}</p>
+        <h2>REKAPITULASI KEHADIRAN PESERTA UJIAN</h2>
       </div>
-
       <div class="meta-grid">
-        <div>
-          <p>Mata Pelajaran: ${attendanceData.examName}</p>
-          <p>Filter Grup: ${groupName}</p>
-          <p>Total Peserta: ${attendanceData.totalStudents}</p>
-        </div>
-        <div class="meta-right">
-          <p>Hadir: ${attendanceData.presentCount} (${attendanceData.presentPercentage})</p>
-          <p>Absen: ${attendanceData.absentCount}</p>
-          <p>Tanggal Cetak: ${new Date().toLocaleString('id-ID')}</p>
-        </div>
+        <div><p>Mata Pelajaran: ${attendanceData.examName}</p><p>Filter Grup: ${groupName}</p></div>
+        <div class="meta-right"><p>Hadir: ${attendanceData.presentCount}</p><p>Absen: ${attendanceData.absentCount}</p></div>
       </div>
-
-      <div style="margin-top: 20px; font-weight: bold; background: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px;">
-        DAFTAR PESERTA TIDAK HADIR (ABSEN)
-      </div>
-
       <table>
-        <thead>
-          <tr>
-            <th style="width: 40px" class="text-center">No</th>
-            <th style="width: 150px">ID / Username</th>
-            <th>Nama Lengkap Peserta</th>
-            <th style="width: 150px" class="text-center">Grup / Rombel</th>
-            <th style="width: 120px" class="text-center">Status</th>
-          </tr>
-        </thead>
+        <thead><tr><th>No</th><th>ID</th><th>Nama Lengkap</th><th>Grup</th><th>Status</th></tr></thead>
         <tbody>
           ${attendanceData.absentStudents.map((s: any, i: number) => `
-            <tr>
-              <td class="text-center">${i + 1}</td>
-              <td style="font-family: monospace;">${s.username}</td>
-              <td class="font-bold uppercase">${s.name}</td>
-              <td class="text-center">${s.group}</td>
-              <td class="text-center" style="color: #be123c; font-weight: bold; font-size: 8px;">TIDAK HADIR</td>
-            </tr>
+            <tr><td class="text-center">${i + 1}</td><td>${s.username}</td><td class="font-bold">${s.name}</td><td>${s.group}</td><td class="text-center" color="red">ABSEN</td></tr>
           `).join('')}
-          ${attendanceData.absentStudents.length === 0 ? '<tr><td colspan="5" style="text-align: center; font-style: italic; padding: 40px; color: #666;">Seluruh peserta hadir (Nihil Absen)</td></tr>' : ''}
         </tbody>
       </table>
-
-      <div class="footer-sign" style="margin-top: 60px;">
-        <div class="sign-box">
-          <p>Mengetahui,</p>
-          <p>Admin CBT System</p>
-          <div class="sign-space" style="height: 60px;"></div>
-          <div class="sign-line" style="width: 200px;"></div>
-          <p style="font-size: 9px; margin-top: 5px;">NIP. ..............................</p>
-        </div>
-        <div class="sign-box">
-          <p>Proktor Utama,</p>
-          <p>Petugas Ruang</p>
-          <div class="sign-space" style="height: 60px;"></div>
-          <div class="sign-line" style="width: 200px;"></div>
-          <p style="font-size: 9px; margin-top: 5px;">NIP. ..............................</p>
-        </div>
-      </div>
     `;
-
-    import('../../utils/printReport').then(m => {
-        m.printReport(`Rekap_Absen_${attendanceData.examName}`, html);
-    });
+    import('../../utils/printReport').then(m => m.printReport(`Absen_${attendanceData.examName}`, html));
   };
 
   if (isLoadingInitial) {
@@ -203,39 +194,76 @@ const AttendanceManager: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       <div className="no-print space-y-6">
-      {/* Header Simple */}
-      <div className="flex items-center gap-4">
-        <div className="p-2 bg-indigo-600 rounded text-white shadow-lg shadow-indigo-200">
-          <Users className="w-5 h-5" />
+      {/* Header & Tabs */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="flex items-center gap-4">
+            <div className="p-2 bg-indigo-600 rounded text-white shadow-lg shadow-indigo-200"><Users className="w-5 h-5" /></div>
+            <div>
+                <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">Manajemen Kehadiran</h1>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Laporan partisipasi & rekap mingguan</p>
+            </div>
         </div>
-        <div>
-          <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">Rekap Kehadiran Test</h1>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Laporan partisipasi peserta ujian</p>
+
+        <div className="flex bg-slate-100 p-1 rounded-2xl border">
+            <button 
+                onClick={() => {setActiveMode('single'); setShowResults(false);}}
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMode === 'single' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                Per Mapel
+            </button>
+            <button 
+                onClick={() => {setActiveMode('recap'); setShowResults(false);}}
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMode === 'recap' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                Rekap Multi-Mapel
+            </button>
         </div>
       </div>
 
-      {/* Filter Panel */}
       <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-xl shadow-slate-200/50">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Pilih Nama Ujian</label>
-            <div className="relative">
-               <select 
-                 className="w-full h-11 pl-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:border-indigo-600 outline-none transition-all appearance-none"
-                 value={selectedExam}
-                 onChange={(e) => setSelectedExam(e.target.value)}
-               >
-                 <option value="">-- Cari dan Pilih Ujian --</option>
-                 {exams.map(e => (
-                    <option key={e.id} value={e.id}>{e.name}</option>
-                 ))}
-               </select>
-               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          <div className={`${activeMode === 'single' ? 'md:col-span-6' : 'md:col-span-8'}`}>
+            <div className="flex items-center justify-between mb-1.5 pl-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {activeMode === 'single' ? 'Pilih Nama Ujian' : 'Pilih Daftar Ujian'}
+                </label>
+                {activeMode === 'recap' && (
+                    <div className="flex gap-3">
+                        <button onClick={selectAllExams} className="text-[9px] font-black text-indigo-600 hover:text-indigo-800 uppercase">Pilih Semua</button>
+                        <button onClick={deselectAllExams} className="text-[9px] font-black text-slate-400 hover:text-slate-600 uppercase">Reset</button>
+                    </div>
+                )}
             </div>
+            
+            {activeMode === 'single' ? (
+                <div className="relative">
+                    <select 
+                        className="w-full h-11 pl-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:border-indigo-600 outline-none transition-all appearance-none"
+                        value={selectedExam}
+                        onChange={(e) => setSelectedExam(e.target.value)}
+                    >
+                    <option value="">-- Pilih Ujian Tunggal --</option>
+                    {exams.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+            ) : (
+                <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-xl p-3 bg-slate-50/50 grid grid-cols-1 sm:grid-cols-2 gap-2 shadow-inner">
+                    {exams.map(e => (
+                        <label key={e.id} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border transition-all ${selectedExams.includes(e.id.toString()) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-transparent hover:border-slate-100'}`}>
+                            <input 
+                                type="checkbox" 
+                                checked={selectedExams.includes(e.id.toString())}
+                                onChange={() => toggleExamSelection(e.id.toString())}
+                                className="w-4 h-4 rounded text-indigo-600 focus:ring-0" 
+                            />
+                            <span className={`text-[11px] font-bold truncate ${selectedExams.includes(e.id.toString()) ? 'text-indigo-700' : 'text-slate-600'}`}>{e.name}</span>
+                        </label>
+                    ))}
+                </div>
+            )}
           </div>
 
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Filter Grup</label>
+          <div className="md:col-span-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Grup / Kelas</label>
             <div className="relative">
                <select 
                  className="w-full h-11 pl-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:border-indigo-600 outline-none transition-all appearance-none"
@@ -243,130 +271,128 @@ const AttendanceManager: React.FC = () => {
                  onChange={(e) => setSelectedGroup(e.target.value)}
                >
                  <option value="">Semua Grup</option>
-                 {groups.map(g => (
-                    <option key={g.id} value={g.id}>{g.name}</option>
-                 ))}
+                 {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                </select>
                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             </div>
           </div>
 
-          <div className="flex items-end">
+          <div className="md:col-span-2 flex items-end">
             <button 
               onClick={handleSearch}
-              disabled={!selectedExam || isFetching}
-              className="w-full h-11 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-30 disabled:hover:bg-slate-900"
+              disabled={isFetching}
+              className="w-full h-11 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-30"
             >
-              {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} {isFetching ? 'Memuat...' : 'Tampilkan'}
+              {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} {isFetching ? 'Memuat...' : 'Proses'}
             </button>
           </div>
         </div>
       </div>
 
-      {error && (
-        <div className="p-6 bg-rose-50 border-2 border-rose-100 rounded-[2rem] flex items-center gap-4 text-rose-600 animate-in zoom-in-95 duration-300">
-            <AlertCircle className="w-8 h-8" />
-            <div>
-                <p className="text-[10px] font-black uppercase tracking-widest mb-1">Terjadi Masalah</p>
-                <p className="text-sm font-bold">{error}</p>
-            </div>
-        </div>
-      )}
-
-      {showResults && attendanceData && (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-             <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/40 text-center">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Total Peserta</p>
-                <p className="text-3xl font-black text-slate-800 tracking-tighter leading-none">{attendanceData.totalStudents}</p>
-             </div>
-             <div className="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100 shadow-xl shadow-emerald-100/40 text-center">
-                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-[0.2em] mb-2">Hadir</p>
-                <p className="text-3xl font-black text-emerald-700 tracking-tighter leading-none">{attendanceData.presentCount}</p>
-             </div>
-             <div className="bg-rose-50 p-6 rounded-[2rem] border border-rose-100 shadow-xl shadow-rose-100/40 text-center">
-                <p className="text-[9px] font-black text-rose-600 uppercase tracking-[0.2em] mb-2">Absen</p>
-                <p className="text-3xl font-black text-rose-700 tracking-tighter leading-none">{attendanceData.absentCount}</p>
-             </div>
-             <div className="bg-indigo-50 p-6 rounded-[2rem] border border-indigo-100 shadow-xl shadow-indigo-100/40 text-center">
-                <p className="text-[9px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-2">Presensi</p>
-                <p className="text-3xl font-black text-indigo-700 tracking-tighter leading-none">{attendanceData.presentPercentage}</p>
-             </div>
-          </div>
-
-          {/* Absent Students Table */}
-          <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-slate-300/40">
-            <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-               <div className="flex items-center gap-3">
-                  <UserX className="w-5 h-5 text-rose-600" />
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Peserta Tidak Hadir (Absen)</h3>
-               </div>
-               <div className="flex items-center gap-2">
-                  <button 
-                    onClick={exportToExcel}
-                    disabled={attendanceData.absentStudents.length === 0}
-                    className="flex items-center gap-2 px-5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:scale-100"
-                  >
-                     <FileDown className="w-4 h-4" /> Export Excel
-                  </button>
-                  <button 
-                    onClick={handlePrint}
-                    disabled={attendanceData.absentStudents.length === 0}
-                    className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-30"
-                  >
-                     <Printer className="w-4 h-4" /> Cetak PDF
-                  </button>
-               </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50/80 text-slate-400 border-b border-slate-100">
-                  <tr className="text-[10px] font-black uppercase tracking-widest">
-                    <th className="px-8 py-4 w-12 text-center">No</th>
-                    <th className="px-8 py-4">ID / Username</th>
-                    <th className="px-8 py-4">Nama Lengkap</th>
-                    <th className="px-8 py-4">Grup / Rombel</th>
-                    <th className="px-8 py-4 text-center">Opsi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {attendanceData.absentStudents.map((student: any, index: number) => (
-                    <tr key={student.id} className="hover:bg-rose-50/20 transition-all duration-300 group">
-                      <td className="px-8 py-5 text-center text-slate-400 font-black text-xs">{index + 1}</td>
-                      <td className="px-8 py-5 font-mono text-xs text-indigo-600 font-bold tracking-tighter">{student.username}</td>
-                      <td className="px-8 py-5 font-black text-slate-700 uppercase tracking-tight group-hover:text-rose-600 transition-colors">{student.name}</td>
-                      <td className="px-8 py-5 text-slate-500 font-bold text-xs">{student.group}</td>
-                      <td className="px-8 py-5 text-center">
-                         <span className="px-3 py-1 bg-rose-100 text-rose-600 text-[9px] font-black rounded-full border border-rose-200 italic ring-4 ring-rose-50">BELUM HADIR</span>
-                      </td>
-                    </tr>
-                  ))}
-                  {attendanceData.absentStudents.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-8 py-32 text-center">
-                        <div className="flex flex-col items-center">
-                            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-4">
-                                <Users className="w-10 h-10 text-emerald-600" />
+      {showResults && (
+        <div className="space-y-6">
+            {activeMode === 'single' && attendanceData && (
+                <div className="space-y-6">
+                    <div className="grid grid-cols-3 gap-6">
+                        <div className="bg-white p-6 rounded-3xl border border-slate-200 text-center"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Hadir</p><p className="text-2xl font-black text-emerald-600">{attendanceData.presentCount}</p></div>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-200 text-center"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Absen</p><p className="text-2xl font-black text-rose-600">{attendanceData.absentCount}</p></div>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-200 text-center"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Persentase</p><p className="text-2xl font-black text-indigo-600">{attendanceData.presentPercentage}</p></div>
+                    </div>
+                    <div className="bg-white border rounded-[2rem] overflow-hidden shadow-lg">
+                        <div className="p-6 bg-slate-50/50 border-b flex justify-between items-center">
+                            <h3 className="text-sm font-black uppercase tracking-tight">Daftar Tidak Hadir</h3>
+                            <div className="flex gap-2">
+                                <button onClick={exportSingleToExcel} className="p-2 bg-white border rounded-lg hover:bg-slate-50 transition-all"><FileSpreadsheet className="w-4 h-4" /></button>
+                                <button onClick={handlePrintSingle} className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all"><Printer className="w-4 h-4" /></button>
                             </div>
-                            <h4 className="text-xl font-black text-slate-800 uppercase mb-2">Semua Peserta Hadir!</h4>
-                            <p className="text-sm text-slate-400 font-bold uppercase tracking-widest max-w-xs leading-relaxed">Luar biasa! Tidak ada data peserta yang absen untuk filter ini.</p>
                         </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
+                                <tr><th className="px-6 py-4">No</th><th className="px-6 py-4">Nama Peserta</th><th className="px-6 py-4">Grup</th><th className="px-6 py-4 text-center">Status</th></tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {attendanceData.absentStudents.map((s:any, i:number) => (
+                                    <tr key={s.id} className="hover:bg-rose-50/30 font-bold text-sm">
+                                        <td className="px-6 py-4">{i+1}</td><td className="px-6 py-4 uppercase">{s.name}</td><td className="px-6 py-4">{s.group}</td><td className="px-6 py-4 text-center text-[9px] text-rose-600">ABSEN</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
 
-            <div className="px-8 py-4 bg-slate-900 flex justify-between items-center">
-               <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse"></div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Live Monitoring System active</span>
-               </div>
-               <span className="text-[10px] font-black text-slate-600 uppercase">CBT System 2026</span>
-            </div>
-          </div>
+            {activeMode === 'recap' && recapData && (
+                <div className="space-y-6">
+                    <div className="bg-white border rounded-[2.5rem] overflow-hidden shadow-2xl">
+                        <div className="p-8 bg-slate-50/50 border-b flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <div>
+                                <h3 className="text-base font-black uppercase tracking-tight text-slate-800">Matriks Rekap Kehadiran Terintegrasi</h3>
+                                <p className="text-xs font-bold text-slate-400">Menampilkan status kehadiran siswa di seluruh mata pelajaran terpilih</p>
+                            </div>
+                            <div className="flex items-center gap-6">
+                                <label className="flex items-center gap-2 cursor-pointer group">
+                                    <div className={`w-10 h-5 rounded-full p-1 transition-all ${onlyAbsentees ? 'bg-indigo-600' : 'bg-slate-300'}`} onClick={() => setOnlyAbsentees(!onlyAbsentees)}>
+                                        <div className={`w-3 h-3 bg-white rounded-full transition-all ${onlyAbsentees ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                    </div>
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Hanya Tampilkan Yang Absen</span>
+                                </label>
+                                <button 
+                                    onClick={exportRecapToExcel}
+                                    className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all"
+                                >
+                                    <FileSpreadsheet className="w-4 h-4" /> Export Laporan Recap
+                                </button>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-slate-100 text-[10px] font-black uppercase text-slate-500 sticky top-0 z-10 border-b">
+                                    <tr>
+                                        <th className="px-6 py-5 bg-slate-100 min-w-[200px]">Nama Peserta</th>
+                                        <th className="px-6 py-5 bg-slate-100">Grup</th>
+                                        {recapData.exams.map((e:any) => (
+                                            <th key={e.id} className="px-4 py-5 text-center min-w-[120px] border-l border-slate-200/50">
+                                                <div className="truncate max-w-[110px]" title={e.name}>{e.name}</div>
+                                            </th>
+                                        ))}
+                                        <th className="px-6 py-5 text-center bg-slate-200/30 border-l border-slate-300">Total Absen</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 font-bold text-xs uppercase text-slate-700">
+                                    {recapData.matrix
+                                      .filter((s:any) => !onlyAbsentees || s.missedCount > 0)
+                                      .map((s:any) => (
+                                        <tr key={s.id} className={`hover:bg-slate-50 transition-all ${s.missedCount > 0 ? 'bg-amber-50/30' : ''}`}>
+                                            <td className="px-6 py-4 bg-white/50">{s.name}</td>
+                                            <td className="px-6 py-4">{s.group}</td>
+                                            {recapData.exams.map((e:any) => (
+                                                <td key={e.id} className="px-4 py-4 text-center border-l border-slate-100/50">
+                                                    {s.attendance[e.id] ? (
+                                                        <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
+                                                    ) : (
+                                                        <XCircle className="w-4 h-4 text-rose-500 mx-auto" />
+                                                    )}
+                                                </td>
+                                            ))}
+                                            <td className={`px-6 py-4 text-center font-black border-l border-slate-200 ${s.missedCount > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                                                {s.missedCount} / {recapData.exams.length}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="p-6 bg-slate-900 flex justify-between items-center text-white">
+                            <div className="flex gap-4">
+                                <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /><span className="text-[10px] font-black uppercase tracking-widest opacity-60">Hadir</span></div>
+                                <div className="flex items-center gap-2"><XCircle className="w-3.5 h-3.5 text-rose-400" /><span className="text-[10px] font-black uppercase tracking-widest opacity-60">Absen / Susulan</span></div>
+                            </div>
+                            <p className="text-[9px] font-bold opacity-40 uppercase tracking-[0.3em]">CBT Integrated Reporting System</p>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
       )}
      </div>
