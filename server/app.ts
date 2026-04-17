@@ -51,6 +51,11 @@ function getLevenshteinDistance(a: string, b: string): number {
   return matrix[b.length][a.length];
 }
 
+function stripHtml(html: string): string {
+    if (!html) return "";
+    return html.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').trim();
+}
+
 // ===== AUTHENTICATION =====
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
@@ -105,6 +110,8 @@ app.post('/api/auth/login', async (req, res) => {
             expiresAt: expiresAt
         }
     });
+
+    console.log(`[AUTH] User ${username} logged in. Multi: ${toggleSettings.enableMultiLogin}`);
     
     res.json({
       success: true,
@@ -345,7 +352,7 @@ app.get('/api/proctoring', async (req, res) => {
     const users = await prisma.user.findMany({
       where: { levelInt: { lt: 5 } },
       include: {
-        group: true,
+        groups: true,
         results: {
           orderBy: { startedAt: 'desc' },
           take: 1,
@@ -406,10 +413,11 @@ app.get('/api/proctoring', async (req, res) => {
         questionNo,
         warnings,
         timeLeft,
-        group: user.group ? user.group.name : 'Tanpa Kelas',
+        group: user.groups?.[0] ? user.groups[0].name : 'Tanpa Kelas',
         testName: recentResult?.exam?.name || '-',
         lockedAt: recentResult?.startedAt ? new Date(recentResult.startedAt).toLocaleString() : '-',
-        isExempt: exemptList.includes(user.id)
+        isExempt: exemptList.includes(user.id),
+        resultId: recentResult?.id || null
       };
     });
 
@@ -421,24 +429,33 @@ app.get('/api/proctoring', async (req, res) => {
 
 app.post('/api/proctoring/:id/action', async (req, res) => {
   const { id } = req.params;
-  const { action, timeLeft } = req.body;
+  const { action, timeLeft, resultId: bodyResultId } = req.body;
   if (!prisma) return res.status(500).json({ success: false });
 
   try {
     const userId = parseInt(id);
-    const recentResult = await prisma.examResult.findFirst({
-        where: { userId },
-        orderBy: { startedAt: 'desc' }
-    });
+    
+    // Use bodyResultId if provided, otherwise fallback to latest for this user
+    let recentResult: any = null;
+    if (bodyResultId) {
+        recentResult = await prisma.examResult.findUnique({ where: { id: parseInt(bodyResultId) } });
+    } else {
+        recentResult = await prisma.examResult.findFirst({
+            where: { userId },
+            orderBy: { startedAt: 'desc' }
+        });
+    }
 
     // Helper to update result if exists
     const updateResult = async (data: any) => {
         if (recentResult) {
+            console.log(`[PROCTORING] Applying action ${action} to result ${recentResult.id}`);
             await prisma.examResult.update({
                 where: { id: recentResult.id },
                 data: { 
                     ...data,
-                    remainingSeconds: timeLeft ? parseInt(timeLeft) : recentResult.remainingSeconds
+                    // If data has explicit remainingSeconds, use it. Otherwise use timeLeft or keep current.
+                    remainingSeconds: (data.remainingSeconds !== undefined) ? data.remainingSeconds : (timeLeft ? parseInt(timeLeft) : recentResult.remainingSeconds)
                 }
             });
         }
@@ -452,7 +469,13 @@ app.post('/api/proctoring/:id/action', async (req, res) => {
         await prisma.session.deleteMany({ where: { userId } });
         await updateResult({ status: 'SUSPENDED' });
     } else if (action === 'reset_finished') {
-      await updateResult({ status: 'ONGOING', finishedAt: null, score: 0, remainingSeconds: null });
+      // KEEP ANSWERS, JUST ALLOW LOGIN AGAIN
+      await updateResult({ 
+          status: 'ONGOING', 
+          finishedAt: null, 
+          score: null, // Reset score to null until saved again
+          remainingSeconds: null // Signal to start API to reset to full duration
+      });
     }
  else if (action === 'add_time') {
         // Placeholder for time extension logic
@@ -510,8 +533,9 @@ app.get('/api/exams/active', async (req, res) => {
     const exams = await prisma.exam.findMany({
       where: {
         enabled: true,
-        startTime: { lte: now },
-        endTime: { gte: now },
+        // If isAll (Admin Preview), ignore time window. If student, strictly within time.
+        startTime: isAll ? undefined : { lte: now },
+        endTime: isAll ? undefined : { gte: now },
         // If isAll, return all active exams. Otherwise filter by user groups.
         OR: isAll ? undefined : [
             { groups: { none: {} } },
@@ -532,7 +556,7 @@ app.get('/api/exams/active', async (req, res) => {
     });
 
     // 3. Filter exams based on Precision Targeting Rules
-    const eligibleExams = exams.filter((e: any) => {
+    const eligibleExams = isAll ? exams : exams.filter((e: any) => {
        const rules = JSON.parse(e.targetRulesJson || '[]');
        if (rules.length === 0) {
           // Fallback to simple group intersection if no rules (old behavior/direct assignment)
@@ -585,7 +609,8 @@ app.get('/api/exams/active', async (req, res) => {
         subject: e.topicRules[0]?.subject?.name || 'Materi Campuran',
         duration: e.duration,
         totalQuestions: totalQ,
-        status: currentStatus
+        status: currentStatus,
+        token: e.token
       };
     });
     res.json(formatted);
@@ -793,17 +818,15 @@ async function calculateScoreForExamResult(resultId: number) {
             const rightAns = displayAnswers.find(a => a.isRight);
             if (rightAns && studentAns) {
                 const s1 = studentAns.toString().trim().toLowerCase();
-                const s2 = rightAns.content.toString().trim().toLowerCase();
+                const s2 = stripHtml(rightAns.content || "").toLowerCase();
                 
                 if (s1 === s2) {
                     totalScore += basePoints;
-                } else if (q.similarity) {
+                } else {
                     const distance = getLevenshteinDistance(s1, s2);
                     const maxLen = Math.max(s1.length, s2.length);
-                    const similarity = maxLen === 0 ? 1 : (maxLen - distance) / maxLen;
-                    
-                    // Threshold minimal 70% kemiripan untuk mendapatkan poin parsial
-                    if (similarity >= 0.7) {
+                    const similarity = maxLen === 0 ? 0 : (maxLen - distance) / maxLen;
+                    if (similarity > 0) {
                         totalScore += (similarity * basePoints);
                     }
                 }
@@ -897,10 +920,19 @@ app.post('/api/exams/:id/start', async (req, res) => {
         orderBy: { startedAt: 'desc' }
     });
 
+    const exam = await prisma.exam.findUnique({ where: { id: parseInt(id) } });
+
     if (completedResult) {
-        const exam = await prisma.exam.findUnique({ where: { id: parseInt(id) } });
         if (!exam?.canRepeat) {
             return res.status(403).json({ success: false, error: 'Anda sudah menyelesaikan ujian ini dan tidak dapat mengulanginya.' });
+        }
+    }
+
+    // Check Password (Token) for NEW session
+    const { password } = req.body;
+    if (exam?.token && exam.token.trim() !== "") {
+        if (password !== exam.token) {
+            return res.status(403).json({ success: false, error: 'Kata sandi ujian (Token) salah atau belum dimasukkan.' });
         }
     }
 
@@ -947,6 +979,14 @@ app.post('/api/exams/:id/save-progress', async (req, res) => {
                 remainingSeconds: timeLeft !== undefined ? Number(timeLeft) : undefined
             }
         });
+
+        // RE-CALCULATE SCORE IN REAL-TIME (Conditional based on settings)
+        const testSettingsRow = await prisma.appSetting.findUnique({ where: { key: 'cbt_test_settings' } });
+        const testSettings = testSettingsRow ? JSON.parse(testSettingsRow.value) : { realtimeGrading: true };
+        
+        if (testSettings.realtimeGrading) {
+            await calculateScoreForExamResult(result.id);
+        }
 
         res.json({ success: true, status: updated.status });
     } catch (e) {
@@ -1844,17 +1884,36 @@ app.get('/api/results/:id/review', async (req, res) => {
                 points = (correctInQuestion / displayAnswers.length) * basePoints;
                 isCorrect = correctInQuestion === displayAnswers.length;
             }
+        } else if (type === 'FIB' || type === 'fib') {
+            const rightAns = displayAnswers.find(a => a.isRight);
+            if (rightAns && studentAns) {
+                const s1 = studentAns.toString().trim().toLowerCase();
+                const s2 = stripHtml(rightAns.content || "").toLowerCase();
+                if (s1 === s2) {
+                    points = basePoints;
+                    isCorrect = true;
+                } else {
+                    const distance = getLevenshteinDistance(s1, s2);
+                    const maxLen = Math.max(s1.length, s2.length);
+                    const similarity = maxLen === 0 ? 0 : (maxLen - distance) / maxLen;
+                    points = similarity > 0 ? (similarity * basePoints) : 0;
+                    isCorrect = similarity >= 0.99; // Almost perfect
+                }
+            }
         }
 
         const correctAns = displayAnswers.find(a => a.isRight);
         
         return {
             id: q.id,
-            type: type.toLowerCase() === 'mcma' ? 'mcma' : (type.toLowerCase() === 'ordering' ? 'ordering' : (type.toLowerCase() === 'matching' ? 'matching' : 'multiple-choice')),
+            type: type.toLowerCase() === 'mcma' ? 'mcma' : 
+                  (type.toLowerCase() === 'ordering' ? 'ordering' : 
+                  (type.toLowerCase() === 'matching' ? 'matching' : 
+                  (type.toLowerCase() === 'fib' ? 'fib' : 'multiple-choice'))),
             question: q.content,
             options: displayAnswers.map((a, idx) => ({ 
                 key: labels[idx], 
-                text: a.content, 
+                text: type.toLowerCase() === 'fib' ? stripHtml(a.content) : a.content, 
                 correctVal: (a.position + 1).toString()
             })),
             studentChoice: studentAns,
@@ -2591,3 +2650,20 @@ const PORT = 3001;
 app.listen(PORT, () => {
   console.log(`✅ SERVER ONLINE: Running on port ${PORT}`);
 });
+
+// Global Background Tasks - Auto Cleanup Sessions
+setInterval(async () => {
+    if (prisma) {
+        try {
+            const now = new Date();
+            const deleted = await prisma.session.deleteMany({
+                where: { expiresAt: { lt: now } }
+            });
+            if (deleted.count > 0) {
+                console.log(`[CLEANUP] Deleted ${deleted.count} expired sessions.`);
+            }
+        } catch (e) {
+            console.error("[CLEANUP ERROR]", e);
+        }
+    }
+}, 3600000); // Every 1 hour

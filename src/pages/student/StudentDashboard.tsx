@@ -51,9 +51,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ isAdminView = false
         
         setItems(Array.isArray(data) ? data.map((e: any) => ({
           ...e,
-          subject: e.topicRules?.[0]?.subject?.name || 'Materi Campuran',
-          totalQuestions: e.topicRules?.reduce((acc: number, r: any) => acc + (r.questionCount || 0), 0) || 0,
-          status: e.results?.[0]?.status?.toLowerCase() || 'available'
+          // Server already processed these fields correctly
+          subject: e.subject || (e.topicRules?.[0]?.subject?.name || 'Materi Campuran'),
+          totalQuestions: e.totalQuestions || (e.topicRules?.reduce((acc: number, r: any) => acc + (r.questionCount || 0), 0) || 0)
         })) : []);
       } catch (err) {
         console.error("Gagal mengambil data:", err);
@@ -66,9 +66,34 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ isAdminView = false
     fetchData();
   }, [isAdminView]);
 
-  const handleKerjakan = (id: string | number) => {
-    const previewParam = isAdminView ? '?preview=true' : '';
-    navigate(`/student/exam/${id}${previewParam}`);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [selectedExam, setSelectedExam] = useState<any>(null);
+
+  const handleKerjakan = (item: any) => {
+    if (isAdminView) {
+      navigate(`/student/exam/${item.id}?preview=true`);
+      return;
+    }
+
+    // Jika ada token/password DAN belum pernah mulai (status != ongoing)
+    if (item.token && item.token.trim() !== "" && item.status !== 'ongoing') {
+      setSelectedExam(item);
+      setPasswordInput('');
+      setPasswordModalOpen(true);
+    } else {
+      navigate(`/student/exam/${item.id}`);
+    }
+  };
+
+  const confirmPassword = () => {
+    if (!selectedExam) return;
+    if (passwordInput === selectedExam.token) {
+       navigate(`/student/exam/${selectedExam.id}`, { state: { examPassword: passwordInput } });
+       setPasswordModalOpen(false);
+    } else {
+       alert("Kata sandi ujian (Token) yang Anda masukkan salah.");
+    }
   };
 
   return (
@@ -173,7 +198,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ isAdminView = false
 
               <button
                 disabled={!isAdminView && (item.status === 'completed' || item.status === 'suspended')}
-                onClick={() => handleKerjakan(item.id)}
+                onClick={() => handleKerjakan(item)}
                 className={`w-full h-14 rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 overflow-hidden relative ${
                   !isAdminView && (item.status === 'completed' || item.status === 'suspended')
                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
@@ -191,6 +216,45 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ isAdminView = false
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* --- PASSWORD MODAL --- */}
+      {passwordModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-300">
+           <div className="bg-white rounded-[3rem] p-10 max-w-sm w-full shadow-2xl border border-slate-50 animate-in zoom-in-95 duration-300">
+              <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner ring-4 ring-indigo-50/50">
+                 <AlertTriangle className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase italic tracking-tighter text-center">Butuh Kata Sandi</h2>
+              <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest mb-8 text-center">Silakan masukkan Token / Mata Sandi untuk mengakses ujian ini</p>
+              
+              <div className="space-y-4">
+                 <div className="relative group">
+                    <input 
+                      type="password"
+                      value={passwordInput}
+                      onChange={(e) => setPasswordInput(e.target.value)}
+                      placeholder="Masukkan Token Sesi"
+                      className="w-full h-14 px-6 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-center text-indigo-600 tracking-[0.5em] outline-none focus:border-indigo-600 focus:bg-white transition-all placeholder:tracking-normal placeholder:font-bold placeholder:text-slate-300"
+                    />
+                 </div>
+                 <div className="flex flex-col gap-3 pt-4">
+                    <button 
+                      onClick={confirmPassword}
+                      className="w-full h-14 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:translate-y-0"
+                    >
+                      Konfirmasi
+                    </button>
+                    <button 
+                      onClick={() => setPasswordModalOpen(false)}
+                      className="w-full h-14 bg-white text-slate-400 rounded-2xl font-bold uppercase tracking-widest hover:bg-slate-50 transition-all border border-slate-100"
+                    >
+                      Batal
+                    </button>
+                 </div>
+              </div>
+           </div>
         </div>
       )}
     </div>

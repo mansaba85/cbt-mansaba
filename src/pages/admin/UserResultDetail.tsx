@@ -247,6 +247,21 @@ const UserResultDetail: React.FC = () => {
                         </tbody>
                      </table>
                   </div>
+               ) : q.type === 'fib' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                     <div className="p-5 bg-indigo-50 border border-indigo-200 rounded-2xl relative shadow-sm transition-all hover:shadow-md">
+                        <span className="absolute -top-2.5 left-5 bg-indigo-600 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">Jawaban Siswa</span>
+                        <p className="text-xl font-black text-indigo-900 mt-2 break-words">
+                          {typeof q.studentChoice === 'string' ? q.studentChoice : (q.studentChoice || '-')}
+                        </p>
+                     </div>
+                     <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl relative shadow-sm transition-all hover:shadow-md">
+                        <span className="absolute -top-2.5 left-5 bg-emerald-600 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">Kunci Jawaban</span>
+                        <p className="text-xl font-black text-emerald-900 mt-2 break-words">
+                          {q.options.find((o: any) => o.text)?.text || '-'}
+                        </p>
+                     </div>
+                  </div>
                ) : (
                  <div className="space-y-4 mt-2">
                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">

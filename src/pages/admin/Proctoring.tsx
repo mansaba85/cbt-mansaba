@@ -27,6 +27,7 @@ interface ProctorStudent {
   timeLeft: string;
   group: string;
   isExempt?: boolean;
+  resultId: number | null;
 }
 
 function StudentCard({ 
@@ -129,22 +130,22 @@ function StudentCard({
             </button>
             {openDropdown === student.id && (
               <div onClick={(e) => e.stopPropagation()} className="absolute right-0 mt-1 w-64 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in zoom-in-95">
-                <button onClick={() => handleAction(student.id, 'unlock')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium text-slate-700">
+                <button onClick={() => handleAction(student.id, 'unlock', student.resultId)} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium text-slate-700">
                   <Unlock className="w-4 h-4 text-emerald-500" /> Buka Kunci (Reset Status)
                 </button>
-                <button onClick={() => handleAction(student.id, 'reset_finished')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium text-slate-700">
+                <button onClick={() => handleAction(student.id, 'reset_finished', student.resultId)} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium text-slate-700">
                   <RotateCcw className="w-4 h-4 text-amber-500" /> Buka Akses Ujian Ulang
                 </button>
-                <button onClick={() => handleAction(student.id, 'add_time')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium text-slate-700">
+                <button onClick={() => handleAction(student.id, 'add_time', student.resultId)} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium text-slate-700">
                   <Clock className="w-4 h-4 text-indigo-500" /> Tambah Waktu (+10 Menit)
                 </button>
                 <div className="w-full h-px bg-slate-100 my-1"></div>
-                <button onClick={() => handleAction(student.id, 'toggle_cheat_exempt')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium text-slate-700">
+                <button onClick={() => handleAction(student.id, 'toggle_cheat_exempt', student.resultId)} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-sm font-medium text-slate-700">
                   <ShieldAlert className={`w-4 h-4 ${student.isExempt ? 'text-rose-500' : 'text-emerald-500'}`} /> 
                   {student.isExempt ? 'Cabut Pengecualian Anti-Cheat' : 'Kecualikan dari Anti-Cheat'}
                 </button>
                 <div className="w-full h-px bg-slate-100 my-1"></div>
-                <button onClick={() => handleAction(student.id, 'logout')} className="w-full text-left px-4 py-2 hover:bg-rose-50 flex items-center gap-2 text-sm font-medium text-rose-600">
+                <button onClick={() => handleAction(student.id, 'logout', student.resultId)} className="w-full text-left px-4 py-2 hover:bg-rose-50 flex items-center gap-2 text-sm font-medium text-rose-600">
                   <LogOut className="w-4 h-4" /> Keluarkan Paksa (Kick)
                 </button>
               </div>
@@ -231,13 +232,13 @@ export default function Proctoring() {
   const lockedCount = students.filter(s => s.status === 'locked').length;
   const totalCount = students.length;
 
-  const handleAction = async (studentId: string, action: 'unlock' | 'logout' | 'reset_warnings' | 'reset_finished' | 'add_time' | 'toggle_cheat_exempt') => {
+  const handleAction = async (studentId: string, action: string, resultId?: number) => {
     setOpenDropdown(null);
     try {
       await fetch(`http://localhost:3001/api/proctoring/${studentId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ action, resultId })
       });
       fetchLiveProctoring();
     } catch (e) {

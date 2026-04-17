@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { 
   Clock, 
   ChevronLeft, 
@@ -26,6 +26,7 @@ interface Question { id: number; text: string; type: string; options: Option[]; 
 const ExamPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [params] = useSearchParams();
   const isPreview = params.get('preview') === 'true';
 
@@ -121,8 +122,15 @@ const ExamPage: React.FC = () => {
   const hasStarted = React.useRef(false);
   const [expiryTime, setExpiryTime] = useState<number | null>(null);
 
-  // 1. Timer Engine
+  // 1. Timer Engine & Auto Fullscreen Mount
   useEffect(() => {
+    // Try auto-fullscreen on mount (gesture from dashboard might still be valid)
+    if (!isPreview && testSettings?.forceFullscreen && !isCheatLocked) {
+        document.documentElement.requestFullscreen().catch(() => {
+            console.log("[FULLSCREEN] Mount request blocked, waiting for interaction.");
+        });
+    }
+
     let timer: any;
     if (expiryTime) {
       console.log("[TIMER] Started with expiry:", new Date(expiryTime).toLocaleTimeString());
@@ -189,7 +197,10 @@ const ExamPage: React.FC = () => {
       const res = await fetch(`http://localhost:3001/api/exams/${id}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id })
+        body: JSON.stringify({ 
+          userId: user.id,
+          password: (location.state as any)?.examPassword
+        })
       });
       const data = await res.json();
 
@@ -406,11 +417,43 @@ const ExamPage: React.FC = () => {
     const visibilityHandler = () => { if (document.visibilityState === 'hidden') handleViolation(); };
     window.addEventListener('blur', handleViolation);
     document.addEventListener('visibilitychange', visibilityHandler);
+    
+    // FULLSCREEN ENFORCEMENT
+    const handleFullscreenChange = () => {
+        if (testSettings?.forceFullscreen && !document.fullscreenElement && !isPreview && !isCheatLocked) {
+             // We can't force it without interaction, but we can try 
+             // and also show a warning or modal if needed. 
+             // For now, let's just try to re-request.
+             document.documentElement.requestFullscreen().catch(() => {});
+        }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
     return () => {
         window.removeEventListener('blur', handleViolation);
         document.removeEventListener('visibilitychange', visibilityHandler);
+        document.removeEventListener('fullscreenchange', handleFullscreenChange);
+
+        // Auto-exit fullscreen when leaving the exam page
+        if (document.fullscreenElement && !isPreview) {
+            document.exitFullscreen().catch(() => {});
+        }
     };
   }, [isPreview, testSettings, id, navigate, isCheatLocked, isExempt]);
+
+  // Mandatory Fullscreen Initial Trigger on interaction
+  useEffect(() => {
+    if (isPreview || !testSettings?.forceFullscreen || isCheatLocked || isLoading) return;
+    
+    const trigger = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+        }
+    };
+    
+    window.addEventListener('click', trigger, { once: true });
+    return () => window.removeEventListener('click', trigger);
+  }, [testSettings, isPreview, isCheatLocked, isLoading]);
 
   useEffect(() => {
     if (isCheatLocked && cheatLockTimer > 0) {
@@ -560,7 +603,9 @@ const ExamPage: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
               <style>{`
                 .question-content, .question-content * {
+                  font-family: 'Outfit', sans-serif !important;
                   font-size: ${fontSize}% !important;
+                  line-height: 1.6 !important;
                 }
                 .question-content img {
                   cursor: zoom-in;
@@ -578,15 +623,15 @@ const ExamPage: React.FC = () => {
                           <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black text-xl shadow-xl ring-4 ring-slate-50">{currentIndex+1}</div>
                           <div>
                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] block mb-1">Butir Soal</span>
-                              <span className="text-xs font-black text-slate-700 uppercase">{currentIndex+1} / {questionsList.length}</span>
+                              <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{currentIndex+1} / {questionsList.length}</span>
                           </div>
                       </div>
                       <div className="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ring-1 ring-indigo-100">{currentQ.type}</div>
                   </div>
 
-                  <div className="text-xl md:text-2xl font-bold mb-12 leading-relaxed text-slate-800" dangerouslySetInnerHTML={{ __html: currentQ.text }}></div>
+                  <div className="text-xl md:text-2xl font-medium mb-12 leading-relaxed text-slate-800 question-content" dangerouslySetInnerHTML={{ __html: currentQ.text }}></div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-4 font-outfit">
                       {currentQ.type === 'ESSAY' ? (
                           <div className="relative group">
                               <div className="absolute top-4 right-6 text-[10px] font-black text-slate-300 uppercase tracking-widest group-focus-within:text-indigo-400 transition-colors">Lembar Jawaban</div>
@@ -603,7 +648,7 @@ const ExamPage: React.FC = () => {
                                   <div key={i} className="group bg-white border border-slate-200 rounded-2xl p-3 hover:border-indigo-400 hover:shadow-md transition-all flex items-center justify-between gap-4">
                                       <div className="flex items-center gap-3 flex-1">
                                           <div className="w-8 h-8 shrink-0 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center font-black text-xs group-hover:bg-indigo-600 group-hover:text-white transition-colors">{opt.id}</div>
-                                          <div className="text-sm font-bold text-slate-700 leading-tight" dangerouslySetInnerHTML={{ __html: opt.text }}></div>
+                                          <div className="text-sm font-medium text-slate-700 leading-tight" dangerouslySetInnerHTML={{ __html: opt.text }}></div>
                                       </div>
                                       <div className="flex items-center gap-3 shrink-0">
                                           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:block">Pilih:</span>
@@ -638,6 +683,17 @@ const ExamPage: React.FC = () => {
                                   </div>
                               ))}
                           </div>
+                      ) : currentQ.type === 'FIB' ? (
+                          <div className="relative group max-w-xl mx-auto py-8">
+                               <input 
+                                 type="text"
+                                 value={answers[currentQ.id] || ''}
+                                 onChange={(e) => setAnswers(prev => ({...prev, [currentQ.id]: e.target.value}))}
+                                 className="w-full h-20 px-10 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none focus:border-indigo-600 font-black text-2xl text-center text-indigo-700 transition-all focus:bg-white focus:shadow-xl shadow-indigo-100/20" 
+                                 placeholder="Ketik jawaban di sini..."
+                               />
+                               <div className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] text-center mt-6">Jawaban Isian Singkat</div>
+                          </div>
                       ) : (
                           <div className="grid grid-cols-1 gap-3">
                               {currentQ.options.map(opt => {
@@ -649,7 +705,7 @@ const ExamPage: React.FC = () => {
                                         className={`w-full p-4 border-2 rounded-2xl flex items-center gap-5 transition-all text-left group ${isSelected ? 'border-indigo-600 bg-indigo-50 shadow-md ring-1 ring-indigo-500' : 'border-slate-100 hover:border-indigo-300 bg-slate-50/20 hover:bg-white'}`}
                                       >
                                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm transition-all shadow-sm ${isSelected ? 'bg-indigo-600 text-white' : 'bg-white border-2 border-slate-100 text-slate-400 group-hover:border-indigo-200 group-hover:text-indigo-400'}`}>{opt.id}</div>
-                                          <div className={`font-bold transition-all ${isSelected ? 'text-indigo-900' : 'text-slate-700'}`} dangerouslySetInnerHTML={{ __html: opt.text }}></div>
+                                          <div className={`font-medium transition-all ${isSelected ? 'text-indigo-900' : 'text-slate-700'}`} dangerouslySetInnerHTML={{ __html: opt.text }}></div>
                                       </button>
                                   );
                               })}
