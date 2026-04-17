@@ -25,7 +25,7 @@ interface User {
   fullName: string;
   levelInt: number;
   createdAt: string;
-  group?: { id: number; name: string };
+  groups: { id: number; name: string; category: string }[];
 }
 
 interface UserForm {
@@ -33,7 +33,7 @@ interface UserForm {
   password: string;
   fullName: string;
   levelInt: number;
-  groupId: string;
+  groupIds: number[];
 }
 
 const emptyForm: UserForm = {
@@ -41,7 +41,7 @@ const emptyForm: UserForm = {
   password: '',
   fullName: '',
   levelInt: 4,
-  groupId: '',
+  groupIds: [],
 };
 
 const UsersManager: React.FC = () => {
@@ -64,6 +64,9 @@ const UsersManager: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [notification, setNotification] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({ show: false, message: '', type: 'success' });
   const [deleteConfirm, setDeleteConfirm] = useState<User | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     const gid = searchParams.get('groupId');
@@ -99,7 +102,26 @@ const UsersManager: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchData(); }, [selectedGroupId]);
+  useEffect(() => { 
+    fetchData(); 
+    setSelectedIds([]); // Clear selection when group filter changes
+  }, [selectedGroupId]);
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(paginatedUsers.map(u => u.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id: number, checked: boolean) => {
+    if (checked) {
+      setSelectedIds(prev => [...prev, id]);
+    } else {
+      setSelectedIds(prev => prev.filter(item => item !== id));
+    }
+  };
 
   const openAdd = () => {
     setModalMode('add');
@@ -117,7 +139,7 @@ const UsersManager: React.FC = () => {
       password: '',
       fullName: user.fullName,
       levelInt: user.levelInt,
-      groupId: String(user.group?.id || ''),
+      groupIds: (user.groups || []).map(g => g.id),
     });
     setShowPassword(false);
     setModalOpen(true);
@@ -145,7 +167,7 @@ const UsersManager: React.FC = () => {
         username: form.username.trim(),
         fullName: form.fullName.trim(),
         levelInt: form.levelInt,
-        groupId: form.groupId || null,
+        groupIds: form.groupIds,
       };
       if (form.password.trim()) payload.password = form.password.trim();
 
@@ -190,6 +212,26 @@ const UsersManager: React.FC = () => {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setIsSaving(true);
+    try {
+      let count = 0;
+      for (const id of selectedIds) {
+        const res = await fetch(`http://localhost:3001/api/users/${id}`, { method: 'DELETE' });
+        if (res.ok) count++;
+      }
+      showNotif(`✅ Berhasil menghapus ${count} user.`);
+      setSelectedIds([]);
+      setBulkDeleteConfirmOpen(false);
+      fetchData();
+    } catch {
+      showNotif('Gagal menghapus beberapa data.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const requestSort = (key: keyof User | 'groupName') => {
     let direction: 'asc' | 'desc' = 'asc';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -206,8 +248,8 @@ const UsersManager: React.FC = () => {
         let bVal: any;
 
         if (sortConfig.key === 'groupName') {
-            aVal = a.group?.name || '';
-            bVal = b.group?.name || '';
+            aVal = a.groups.map(g => g.name).join(', ') || '';
+            bVal = b.groups.map(g => g.name).join(', ') || '';
         } else {
             aVal = a[sortConfig.key];
             bVal = b[sortConfig.key];
@@ -341,19 +383,28 @@ const UsersManager: React.FC = () => {
                     <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Group / Kelas</label>
-                  <div className="relative">
-                    <select
-                      value={form.groupId}
-                      onChange={e => setForm(p => ({ ...p, groupId: e.target.value }))}
-                      className="w-full h-9 pl-3 pr-8 border border-slate-300 rounded text-sm outline-none appearance-none bg-white focus:border-indigo-500"
-                    >
-                      <option value="">-- Pilih Group --</option>
-                      {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                <div className="col-span-2">
+                  <label className="text-xs font-bold text-slate-600 mb-1.5 block">Penempatan Grup (Multi-Select)</label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-3 border border-slate-200 rounded-lg bg-slate-50">
+                    {groups.map(g => (
+                        <label key={g.id} className="flex items-center gap-2 cursor-pointer group">
+                            <input 
+                                type="checkbox"
+                                checked={form.groupIds.includes(g.id)}
+                                onChange={(e) => {
+                                    if (e.target.checked) setForm(p => ({ ...p, groupIds: [...p.groupIds, g.id] }));
+                                    else setForm(p => ({ ...p, groupIds: p.groupIds.filter(id => id !== g.id) }));
+                                }}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-0"
+                            />
+                            <div className="flex flex-col leading-none">
+                                <span className="text-[10px] font-bold text-slate-700">{g.name}</span>
+                                <span className="text-[7px] text-slate-400 font-black uppercase">{g.category}</span>
+                            </div>
+                        </label>
+                    ))}
                   </div>
+                  <p className="text-[9px] text-slate-400 mt-1 italic italic italic">Pilih Sekolah, Kelas, dan Mapel Pilihan siswa ini.</p>
                 </div>
               </div>
             </div>
@@ -401,9 +452,44 @@ const UsersManager: React.FC = () => {
         </div>
       )}
 
+      {/* Bulk Delete Confirm Modal */}
+      {bulkDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="bg-white rounded-[2rem] border border-slate-200 shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200">
+            <div className="p-8">
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center animate-bounce"><Trash2 className="w-8 h-8" /></div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 mb-2">Hapus Masal?</h3>
+                  <p className="text-sm text-slate-500 leading-relaxed font-medium">
+                    Anda akan menghapus <span className="text-rose-600 font-black">{selectedIds.length} pengguna</span> yang dipilih sekaligus. Data tidak dapat dipulihkan!
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 mt-8">
+                <button 
+                  onClick={handleBulkDelete}
+                  disabled={isSaving}
+                  className="w-full py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-rose-500/20 transition-all flex items-center justify-center gap-2"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  YA, HAPUS SEMUANYA
+                </button>
+                <button 
+                  onClick={() => setBulkDeleteConfirmOpen(false)} 
+                  className="w-full py-3 text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-600 transition-colors"
+                >
+                    BATALKAN
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search & Action Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex-1 flex gap-3">
+        <div className="flex-1 flex items-center gap-3">
            <div className="flex-1 relative max-w-md">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
@@ -414,6 +500,17 @@ const UsersManager: React.FC = () => {
                 className="w-full bg-white border border-slate-200 rounded-2xl pl-11 pr-4 py-3 text-sm font-semibold outline-none focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm"
               />
            </div>
+           
+           {/* Bulk Actions Button */}
+           {selectedIds.length > 0 && (
+              <button 
+                onClick={() => setBulkDeleteConfirmOpen(true)}
+                className="flex items-center gap-2 px-6 py-3 bg-rose-50 text-rose-600 border border-rose-100 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 transition-all animate-in slide-in-from-left-4 duration-300"
+              >
+                 <Trash2 className="w-4 h-4" /> Hapus Terpilih ({selectedIds.length})
+              </button>
+           )}
+
            <div className="w-64 relative">
               <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <select 
@@ -463,11 +560,16 @@ const UsersManager: React.FC = () => {
           <table className="w-full text-left text-[13px]">
             <thead className="bg-[#f8fafc] border-b border-slate-200">
               <tr className="select-none">
-                <th className="px-4 py-4 w-12 text-center">
-                   <input type="checkbox" className="rounded border-slate-300" />
+                <th className="px-4 py-4 w-10">
+                   <input 
+                      type="checkbox" 
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                      checked={paginatedUsers.length > 0 && selectedIds.length === paginatedUsers.length}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" 
+                   />
                 </th>
                 <th 
-                  className="px-2 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider text-center w-14 cursor-pointer hover:bg-slate-100/50 group"
+                  className="px-2 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider text-center cursor-pointer hover:bg-slate-100/50 group"
                   onClick={() => requestSort('id')}
                 >
                   <div className="flex items-center justify-center"># <SortIndicator column="id" /></div>
@@ -497,19 +599,16 @@ const UsersManager: React.FC = () => {
                 >
                   <div className="flex items-center justify-center">Registrasi <SortIndicator column="createdAt" /></div>
                 </th>
-                <th 
-                  className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 group"
-                  onClick={() => requestSort('groupName')}
-                >
-                  <div className="flex items-center">Group <SortIndicator column="groupName" /></div>
-                </th>
+                <th className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider">Madrasah</th>
+                <th className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider">Kelas</th>
+                <th className="px-4 py-4 font-black text-[#5c72b2] text-[11px] uppercase tracking-wider">Peminatan</th>
                 <th className="px-4 py-4 font-black text-rose-500 text-[11px] uppercase tracking-wider text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading && (
                 <tr>
-                   <td colSpan={9} className="px-6 py-20 text-center">
+                   <td colSpan={11} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-3">
                          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
                          <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Sinkronisasi Data...</span>
@@ -527,7 +626,12 @@ const UsersManager: React.FC = () => {
                 return (
                   <tr key={u.id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="px-4 py-4 text-center">
-                       <input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                       <input 
+                          type="checkbox" 
+                          checked={selectedIds.includes(u.id)}
+                          onChange={(e) => handleSelectOne(u.id, e.target.checked)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" 
+                       />
                     </td>
                     <td className="px-2 py-4 text-center font-black text-slate-800">{displayIndex}</td>
                     <td className="px-4 py-4 text-blue-600 font-bold hover:underline cursor-pointer">{u.username}</td>
@@ -557,9 +661,20 @@ const UsersManager: React.FC = () => {
                        <div className="text-[9px] text-slate-400 font-bold">{time}</div>
                     </td>
                     <td className="px-4 py-4">
-                       <span className="bg-[#5c72b2]/10 text-[#5c72b2] px-2 py-0.5 rounded text-[10px] font-black uppercase border border-[#5c72b2]/20">
-                          {u.group?.name || 'DEFAULT'}
-                       </span>
+                        <span className="text-[10px] font-bold text-slate-700">{u.groups.find(g => g.category === 'SCHOOL')?.name || '-'}</span>
+                    </td>
+                    <td className="px-4 py-4">
+                        <span className="text-[10px] font-bold text-slate-700">{u.groups.find(g => g.category === 'CLASS')?.name || '-'}</span>
+                    </td>
+                    <td className="px-4 py-4">
+                       <div className="flex flex-wrap gap-1">
+                          {u.groups.filter(g => g.category === 'SUBJECT' || g.category === 'GENERAL').map(g => (
+                            <span key={g.id} className="px-2 py-0.5 rounded text-[8px] font-black uppercase border bg-emerald-50 text-emerald-600 border-emerald-100">
+                               {g.name}
+                            </span>
+                          ))}
+                          {u.groups.filter(g => g.category === 'SUBJECT' || g.category === 'GENERAL').length === 0 && <span className="text-slate-300 text-[10px]">-</span>}
+                       </div>
                     </td>
                     <td className="px-4 py-4 text-right">
                        <div className="flex items-center justify-end gap-1 ">
@@ -585,7 +700,7 @@ const UsersManager: React.FC = () => {
               
               {!isLoading && filteredUsers.length === 0 && (
                 <tr>
-                   <td colSpan={9} className="px-6 py-20 text-center text-slate-400 italic font-medium">
+                   <td colSpan={11} className="px-6 py-20 text-center text-slate-400 italic font-medium">
                       Data tidak ditemukan.
                    </td>
                 </tr>

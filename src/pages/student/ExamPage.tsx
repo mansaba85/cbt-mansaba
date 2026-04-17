@@ -46,6 +46,7 @@ const ExamPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [finishModalOpen, setFinishModalOpen] = useState(false);
+  const [zoomedImg, setZoomedImg] = useState<string | null>(null);
   const [fontSize, setFontSize] = useState(100);
   const [examInfo, setExamInfo] = useState<any>(null);
   
@@ -74,10 +75,8 @@ const ExamPage: React.FC = () => {
     setIsLoading(true);
     try {
       const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
-      const uId = userIdInt || user.id;
-      const url = isPreview 
-        ? `http://localhost:3001/api/questions/${id}` 
-        : `http://localhost:3001/api/exams/${id}/questions?userId=${uId}`;
+      const uId = userIdInt || user.id || 0;
+      const url = `http://localhost:3001/api/exams/${id}/questions?userId=${uId}${isPreview ? '&preview=true' : ''}`;
         
       const res = await fetch(url);
       const data = await res.json();
@@ -93,7 +92,7 @@ const ExamPage: React.FC = () => {
           })));
 
           // AUTO-UNLOCK SYNC
-          if (isCheatLocked) {
+          if (isCheatLocked && uId !== 0) {
               const statusRes = await fetch(`http://localhost:3001/api/exams/active?userId=${uId}`);
               const activeExams = await statusRes.json();
               const thisExam = activeExams.find((e: any) => e.id === parseInt(id || '0'));
@@ -105,8 +104,17 @@ const ExamPage: React.FC = () => {
                   toast.success("Akses ujian telah dipulihkan oleh Proktor.");
               }
           }
+      } else {
+          console.error("Data received is not an array:", data);
+          toast.error("Format data soal tidak didukung.");
       }
-    } catch (e) { toast.error("Gagal memuat soal"); } finally { setIsLoading(false); }
+    } catch (e) { 
+      console.error("Fetch questions error:", e);
+      toast.error("Gagal memuat soal"); 
+    } finally { 
+      console.log("[LOADER] Finishing setIsLoading(false)");
+      setIsLoading(false); 
+    }
   };
 
   const [isExempt, setIsExempt] = useState(false);
@@ -131,26 +139,35 @@ const ExamPage: React.FC = () => {
   }, [expiryTime]);
 
   const fetchExamData = async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-      const res = await fetch(`http://localhost:3001/api/exams/${id}`);
+      const res = await fetch(`http://localhost:3001/api/exams/${id}`, { signal: controller.signal });
       const data = await res.json();
       setExamInfo(data);
       
-      const settingsRes = await fetch('http://localhost:3001/api/settings');
+      const settingsRes = await fetch('http://localhost:3001/api/settings', { signal: controller.signal });
       const settingsData = await settingsRes.json();
       if (settingsData.cbt_test_settings) {
         setTestSettings((prev: any) => ({ ...prev, ...settingsData.cbt_test_settings }));
       }
 
       const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
-      const proctorRes = await fetch('http://localhost:3001/api/proctoring');
-      const proctorData = await proctorRes.json();
-      const me = proctorData.find((p: any) => p.nis === user.username);
-      if (me && me.isExempt) setIsExempt(true);
+      try {
+        const proctorRes = await fetch('http://localhost:3001/api/proctoring', { signal: controller.signal });
+        const proctorData = await proctorRes.json();
+        const me = proctorData.find((p: any) => p.nis === user.username);
+        if (me && me.isExempt) setIsExempt(true);
+      } catch (e) {
+        console.warn("Proctoring fetch warning", e);
+      }
       
       return data;
     } catch (e) {
+      console.error("Exam data fetch error", e);
       return null;
+    } finally {
+      clearTimeout(timeout);
     }
   };
 
@@ -160,7 +177,8 @@ const ExamPage: React.FC = () => {
 
     try {
       if (isPreview) {
-        fetchQuestions();
+        console.log("[PREVIEW] Loading questions for exam:", id);
+        await fetchQuestions();
         const d = durationMinutes || 60;
         setExpiryTime(Date.now() + (d * 60 * 1000));
         setTimeLeft(d * 60);
@@ -203,15 +221,36 @@ const ExamPage: React.FC = () => {
 
   useEffect(() => {
     const init = async () => {
-      if (id) {
-        const exam = await fetchExamData();
-        if (exam) {
-          await startExamSession(exam.duration || 60);
+      try {
+        if (id) {
+          const exam = await fetchExamData();
+          if (exam) {
+            if (!exam.topicRules || exam.topicRules.length === 0) {
+              console.warn("[INIT] Exam has no topic rules.");
+              toast.error("Ujian ini belum memiliki aturan soal (Topik). Silakan hubungi admin.");
+              setIsLoading(false);
+              return;
+            }
+            await startExamSession(exam.duration || 60);
+          } else {
+            setIsLoading(false);
+          }
+        } else {
+          setIsLoading(false);
         }
+      } catch (e) {
+        console.error("Init failed", e);
+        setIsLoading(false);
       }
     };
     init();
   }, [id, isPreview]);
+
+  const timeRef = React.useRef(timeLeft);
+  const answersRef = React.useRef(answers);
+
+  useEffect(() => { timeRef.current = timeLeft; }, [timeLeft]);
+  useEffect(() => { answersRef.current = answers; }, [answers]);
 
   useEffect(() => {
     const saveProgress = async () => {
@@ -243,11 +282,20 @@ const ExamPage: React.FC = () => {
     return () => clearTimeout(debounce);
   }, [answers, id, isPreview]);
 
-  const timeRef = React.useRef(timeLeft);
-  const answersRef = React.useRef(answers);
+  // Magic: Click to Zoom (Lightbox Mode)
+  useEffect(() => {
+      const container = document.querySelector('.question-content');
+      if (!container) return;
+      
+      const handleImgClick = (e: any) => {
+          if (e.target.tagName === 'IMG') {
+            setZoomedImg(e.target.src);
+          }
+      };
 
-  useEffect(() => { timeRef.current = timeLeft; }, [timeLeft]);
-  useEffect(() => { answersRef.current = answers; }, [answers]);
+      container.addEventListener('click', handleImgClick);
+      return () => container.removeEventListener('click', handleImgClick);
+  }, [currentIndex]);
 
   // PERIODIC TIME SYNC (Every 10 seconds)
   useEffect(() => {
@@ -288,7 +336,6 @@ const ExamPage: React.FC = () => {
             const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
             const userId = user.id;
             if (userId) {
-                // Notifikasi server satu kali lagi untuk memastikan status SUSPENDED tercatat
                 await fetch(`http://localhost:3001/api/proctoring/${userId}/action`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -396,12 +443,20 @@ const ExamPage: React.FC = () => {
   };
 
   const handleSubmitExam = async () => {
+    if (isPreview) {
+      toast.info("Mode Pratinjau: Jawaban tidak akan disimpan secara permanen.");
+      navigate('/admin/exams/list');
+      return;
+    }
     try {
         const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
         const res = await fetch(`http://localhost:3001/api/exams/${id}/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id })
+            body: JSON.stringify({ 
+              userId: user.id,
+              answers: answersRef.current 
+            })
         });
         const data = await res.json();
         if (data.success) {
@@ -421,8 +476,20 @@ const ExamPage: React.FC = () => {
     return `${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
   };
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 font-black text-indigo-600 uppercase tracking-widest">Memuat Soal...</div>;
-  if (!questionsList.length) return <div className="min-h-screen flex items-center justify-center bg-slate-50 font-black text-slate-400 uppercase tracking-widest">Soal tidak ditemukan</div>;
+  if (isLoading) return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
+      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      <p className="font-black text-slate-800 text-xs uppercase tracking-[0.3em]">Menyiapkan Lembar Ujian...</p>
+    </div>
+  );
+
+  if (!questionsList.length) return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
+      <ShieldAlert className="w-16 h-16 text-slate-200" />
+      <p className="font-black text-slate-400 text-xs uppercase tracking-widest text-center">Soal tidak ditemukan untuk sesi ini</p>
+      <button onClick={() => navigate('/student')} className="mt-4 px-6 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">Kembali ke Dashboard</button>
+    </div>
+  );
 
   const currentQ = questionsList[currentIndex];
   const answeredCount = Object.keys(answers).length;
@@ -464,7 +531,10 @@ const ExamPage: React.FC = () => {
           <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100"><Monitor className="w-5 h-5 text-white" /></div>
               <div className="hidden sm:block">
-                  <h1 className="font-black uppercase text-[11px] text-slate-800 tracking-tight leading-none">{examInfo?.name || 'Sesi Ujian'}</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="font-black uppercase text-[11px] text-slate-800 tracking-tight leading-none">{examInfo?.name || 'Sesi Ujian'}</h1>
+                    {isPreview && <span className="px-2 py-0.5 bg-rose-500 text-white text-[8px] font-black rounded-full italic animate-pulse">PREVIEW MODE</span>}
+                  </div>
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Ujian Berbasis Komputer</span>
               </div>
           </div>
@@ -491,6 +561,15 @@ const ExamPage: React.FC = () => {
               <style>{`
                 .question-content, .question-content * {
                   font-size: ${fontSize}% !important;
+                }
+                .question-content img {
+                  cursor: zoom-in;
+                  transition: all 0.3s ease;
+                  border-radius: 1rem;
+                }
+                .question-content img:hover {
+                  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+                  ring: 4px solid #e0e7ff;
                 }
               `}</style>
               <div className="max-w-4xl mx-auto bg-white rounded-[2.5rem] border border-slate-200 p-6 md:p-12 shadow-xl shadow-slate-200/50 min-h-[500px] mb-24 transition-all question-content">
@@ -534,7 +613,18 @@ const ExamPage: React.FC = () => {
                                             className="bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-1.5 text-xs font-black text-indigo-600 outline-none cursor-pointer focus:border-indigo-500 focus:bg-white"
                                           >
                                               <option value="">-</option>
-                                              {Array.from({length: currentQ.options.length}, (_, idx) => (idx+1).toString()).map(n => {
+                                              {(() => {
+                                                  // Hitung jumlah item di soal (berdasarkan angka numbering 1., 2., dst)
+                                                  const textNumbers = currentQ.text.match(/(?:^|\s|<p>|\n)(\d+)[\.\)]/g);
+                                                  let maxFromText = 0;
+                                                  if (textNumbers) {
+                                                    const nums = textNumbers.map(n => parseInt(n.match(/\d+/)![0]));
+                                                    maxFromText = Math.max(...nums);
+                                                  }
+                                                  
+                                                  const maxRange = Math.max(currentQ.options.length, maxFromText);
+                                                  return Array.from({length: maxRange}, (_, idx) => (idx+1).toString());
+                                              })().map(n => {
                                                   // Logika: Hilangkan jika sudah dipakai pernyataan LAIN
                                                   const currentQAns = answers[currentQ.id] || {};
                                                   const isUsedByOther = Object.entries(currentQAns).some(([oid, val]) => oid !== opt.id && val === n);
@@ -688,6 +778,34 @@ const ExamPage: React.FC = () => {
                   <div className="flex flex-col gap-4">
                       <button onClick={handleSubmitExam} className="w-full py-5 bg-emerald-500 text-white rounded-3xl font-black uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-emerald-600 hover:-translate-y-1 transition-all active:translate-y-0">Ya, Saya Selesai <ChevronRight className="w-4 h-4 ml-1 inline-block" /></button>
                       <button onClick={() => setFinishModalOpen(false)} className="w-full py-5 bg-white text-slate-400 rounded-3xl font-bold hover:bg-slate-50 transition-all border border-slate-100">Cek Kembali</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* --- PREMIUM IMAGE ZOOM LIGHTBOX --- */}
+      {zoomedImg && (
+          <div 
+            onClick={() => setZoomedImg(null)}
+            className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-auto p-10 md:p-20 overflow-hidden cursor-zoom-out"
+          >
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300"></div>
+              <div className="relative bg-white p-4 md:p-6 rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] border border-slate-100 ring-8 ring-white/10 animate-in zoom-in-95 fade-in duration-300">
+                  <button 
+                    onClick={() => setZoomedImg(null)}
+                    className="absolute -top-4 -right-4 w-12 h-12 bg-white text-slate-900 rounded-2xl shadow-xl flex items-center justify-center hover:bg-rose-50 hover:text-rose-600 transition-all cursor-pointer border border-slate-100 group"
+                  >
+                      <X className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
+                  </button>
+                  <img 
+                      src={zoomedImg} 
+                      className="max-w-[85vw] max-h-[75vh] object-contain rounded-2xl shadow-inner bg-slate-50"
+                      alt="Zoomed Preview" 
+                  />
+                  <div className="mt-4 text-center">
+                      <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em]">
+                          Klik di mana saja untuk menutup
+                      </span>
                   </div>
               </div>
           </div>

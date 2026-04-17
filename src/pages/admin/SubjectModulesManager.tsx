@@ -96,18 +96,18 @@ const SubjectModulesManager: React.FC = () => {
   return (
     <div className="flex flex-col h-full space-y-4 animate-in fade-in duration-500">
       {/* Page Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-           <div className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-blue-600">
-              <Package className="w-6 h-6" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+           <div className="p-3 bg-white border-2 border-indigo-100 rounded-2xl shadow-sm text-indigo-600">
+              <Package className="w-7 h-7" />
            </div>
            <div>
-              <h1 className="text-xl font-black text-slate-800 tracking-tight uppercase">Master Modul</h1>
-              <p className="text-slate-500 font-bold text-[9px] uppercase tracking-[0.2em]">Data Hierarki Ujian</p>
+              <h1 className="text-2xl font-black text-slate-800 tracking-tight">Master Modul</h1>
+              <p className="text-slate-500 font-semibold text-xs mt-0.5">Kelola hierarki mata pelajaran dan topik ujian.</p>
            </div>
         </div>
-        <button className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl font-black shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all hover:-translate-y-0.5 text-[10px] uppercase tracking-widest">
-          <Plus className="w-4 h-4" /> TAMBAH MODUL
+        <button className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all hover:-translate-y-0.5 text-sm">
+          <Plus className="w-5 h-5" /> Tambah Modul
         </button>
       </div>
 
@@ -130,22 +130,24 @@ const SubjectModulesManager: React.FC = () => {
               <div 
                 key={m.id}
                 onClick={() => setSelectedModule(m)}
-                className={`group p-4 rounded-2xl border transition-all cursor-pointer relative overflow-hidden ${
+                className={`group p-4 rounded-xl border-2 transition-all cursor-pointer relative overflow-hidden ${
                   selectedModule?.id === m.id 
-                    ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-500/30' 
-                    : 'bg-white border-slate-200 hover:border-blue-300'
+                    ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-500/30 text-white' 
+                    : 'bg-white border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30'
                 }`}
               >
                 <div className="relative z-10 flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <p className={`text-[8px] font-black uppercase tracking-widest ${selectedModule?.id === m.id ? 'text-blue-100' : 'text-slate-400'}`}>
-                      {m.subjects?.length || 0} Topics
+                    <p className={`text-[10px] font-bold uppercase tracking-wider ${selectedModule?.id === m.id ? 'text-indigo-100' : 'text-slate-500'}`}>
+                      {m.subjects?.length || 0} Topik Tersedia
                     </p>
-                    <h3 className={`text-base font-black tracking-tight ${selectedModule?.id === m.id ? 'text-white' : 'text-slate-800'}`}>
+                    <h3 className={`text-base font-bold tracking-tight ${selectedModule?.id === m.id ? 'text-white' : 'text-slate-800'}`}>
                       {m.name}
                     </h3>
                   </div>
-                  <ChevronRight className={`w-4 h-4 transition-transform ${selectedModule?.id === m.id ? 'text-white translate-x-1' : 'text-slate-300 group-hover:text-blue-500'}`} />
+                  <div className={`p-1.5 rounded-lg transition-all ${selectedModule?.id === m.id ? 'bg-indigo-500/30 text-white translate-x-1' : 'bg-slate-50 text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-100'}`}>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
                 </div>
               </div>
             )) : (
@@ -162,16 +164,16 @@ const SubjectModulesManager: React.FC = () => {
           {selectedModule ? (
             <div className="flex flex-col h-full">
               {/* Module Info Header */}
-              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
+              <div className="px-6 py-5 border-b border-slate-100 bg-white flex items-center justify-between">
                 <div>
-                   <h2 className="text-lg font-black text-slate-800 tracking-tight">{selectedModule.name}</h2>
-                   <p className="text-xs text-slate-400 font-medium">{selectedModule.description || 'Tidak ada deskripsi.'}</p>
+                   <h2 className="text-xl font-bold text-slate-800 tracking-tight">{selectedModule.name}</h2>
+                   <p className="text-sm text-slate-500 font-medium mt-0.5">{selectedModule.description || 'Tidak ada deskripsi modul ini.'}</p>
                 </div>
-                <div className="flex gap-1.5">
-                   <button className="p-2 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm">
+                <div className="flex gap-2">
+                   <button className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm">
                       <Edit3 className="w-4 h-4" />
                    </button>
-                   <button onClick={() => handleDeleteModule(selectedModule.id)} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-rose-600 hover:border-rose-200 transition-all shadow-sm">
+                   <button onClick={() => handleDeleteModule(selectedModule.id)} className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-rose-600 hover:border-rose-200 transition-all shadow-sm">
                       <Trash2 className="w-4 h-4" />
                    </button>
                 </div>
@@ -181,11 +183,11 @@ const SubjectModulesManager: React.FC = () => {
               <div className="flex-1 overflow-hidden flex flex-col p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-blue-600" />
-                    <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.2em]">Daftar Topik</h3>
+                    <Layers className="w-5 h-5 text-indigo-600" />
+                    <h3 className="text-sm font-bold text-slate-800">Daftar Topik / Mata Pelajaran</h3>
                   </div>
-                  <button className="flex items-center gap-2 px-5 py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-md">
-                    <Plus className="w-3.5 h-3.5" /> Tambah Topik
+                  <button className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-md active:scale-95">
+                    <Plus className="w-4 h-4" /> Tambah Topik
                   </button>
                 </div>
 
@@ -201,18 +203,18 @@ const SubjectModulesManager: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {selectedModule.subjects?.map((s: any, idx: number) => (
-                        <tr key={s.id} className="group hover:bg-blue-50/30 transition-colors">
-                          <td className="px-5 py-3 text-[10px] font-black text-slate-300 text-center">{idx + 1}</td>
-                          <td className="px-5 py-3 font-bold text-slate-700 text-xs">{s.name}</td>
-                          <td className="px-5 py-3 text-center">
-                            <span className="px-2 py-0.5 bg-green-50 text-green-600 border border-green-100 rounded-full text-[9px] font-black uppercase">
+                        <tr key={s.id} className="group hover:bg-slate-50 transition-colors">
+                          <td className="px-5 py-3.5 text-xs font-bold text-slate-400 text-center">{idx + 1}</td>
+                          <td className="px-5 py-3.5 font-bold text-slate-700 text-sm italic">{s.name}</td>
+                          <td className="px-5 py-3.5 text-center">
+                            <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-lg text-[10px] font-black uppercase tracking-wider">
                               {s._count?.questions || 0} Soal
                             </span>
                           </td>
-                          <td className="px-5 py-3 text-right text-slate-300">
-                            <div className="flex items-center justify-end gap-1 opacity-10 group-hover:opacity-100 transition-all">
-                              <button className="p-1.5 hover:text-blue-600 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => handleDeleteSubject(s.id)} className="p-1.5 hover:text-rose-600 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <td className="px-5 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-2 transition-all">
+                              <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><Edit3 className="w-4 h-4" /></button>
+                              <button onClick={() => handleDeleteSubject(s.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                             </div>
                           </td>
                         </tr>

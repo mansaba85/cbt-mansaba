@@ -72,11 +72,6 @@ const BackupRestore: React.FC = () => {
   };
 
   const handleBackup = async () => {
-    if (backupType === 'files' || backupType === 'full') {
-        showNotif('Maaf, saat ini hanya Database Backup yang didukung.', 'warning');
-        return;
-    }
-
     setIsBackingUp(true);
     try {
         const res = await fetch('http://localhost:3001/api/backups', { 

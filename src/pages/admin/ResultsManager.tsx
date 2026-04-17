@@ -42,6 +42,8 @@ const ResultsManager: React.FC = () => {
   // Filters
   const [selectedExam, setSelectedExam] = useState<string>('');
   const [selectedGroup, setSelectedGroup] = useState<string>('');
+  const [selectedSchool, setSelectedSchool] = useState<string>('');
+  const [selectedClass, setSelectedClass] = useState<string>('');
   const [dateStart, setDateStart] = useState('2026-01-01T00:00');
   const [dateEnd, setDateEnd] = useState('2026-12-31T23:59');
 
@@ -70,18 +72,39 @@ const ResultsManager: React.FC = () => {
   const handleFilter = async () => {
     if (!selectedExam) return toast.warning('Silakan pilih tes terlebih dahulu');
     setIsLoading(true);
-    setResults([]); // Reset agar layar kosong dulu sebelum data baru muncul (Load state)
+    setResults([]); 
     try {
       const params = new URLSearchParams();
       if (selectedExam) params.append('examId', selectedExam);
-      if (selectedGroup) params.append('groupId', selectedGroup);
+      
+      // Use prioritized filter if selected
+      if (selectedSchool) params.append('groupId', selectedSchool);
+      else if (selectedClass) params.append('groupId', selectedClass);
+      else if (selectedGroup) params.append('groupId', selectedGroup);
+      
       if (dateStart) params.append('dateStart', dateStart);
       if (dateEnd) params.append('dateEnd', dateEnd);
 
       const res = await fetch(`http://localhost:3001/api/results?${params.toString()}`);
-      const data = await res.json();
+      let data = await res.json();
+      
+      // Secondary filter in frontend for combined criteria (School + Class)
+      if (selectedSchool && selectedClass) {
+         const schoolGroup = groups.find(g => g.id.toString() === selectedSchool)?.name;
+         const classGroup = groups.find(g => g.id.toString() === selectedClass)?.name;
+         data = data.filter((r: any) => 
+            r.groups.includes(schoolGroup) && r.groups.includes(classGroup)
+         );
+      } else if (selectedSchool) {
+         const schoolGroup = groups.find(g => g.id.toString() === selectedSchool)?.name;
+         data = data.filter((r: any) => r.groups.includes(schoolGroup));
+      } else if (selectedClass) {
+         const classGroup = groups.find(g => g.id.toString() === selectedClass)?.name;
+         data = data.filter((r: any) => r.groups.includes(classGroup));
+      }
+
       setResults(data);
-      setSelectedIds([]); // Reset selection when filtering
+      setSelectedIds([]); 
     } catch (err) {
       console.error(err);
       toast.error('Gagal mengambil data dari server');
@@ -316,6 +339,10 @@ const ResultsManager: React.FC = () => {
     });
   };
 
+  const schoolGroups = groups.filter(g => g.category === 'SCHOOL');
+  const classGroups = groups.filter(g => g.category === 'CLASS');
+  const otherGroups = groups.filter(g => g.category !== 'SCHOOL' && g.category !== 'CLASS');
+
   return (
     <div className="space-y-4 animate-in fade-in duration-500 pb-20">
       <div className="no-print space-y-4">
@@ -324,79 +351,96 @@ const ResultsManager: React.FC = () => {
         <div className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-rose-500">
           <Trophy className="w-5 h-5" />
         </div>
-        <h1 className="text-lg font-black text-slate-800 uppercase tracking-tight">Ringkasan Hasil Test</h1>
+        <h1 className="text-lg font-black text-slate-800 uppercase tracking-tight">Hasil Test & Filter Lanjutan</h1>
       </div>
 
       {/* Filter Panel */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/40 p-6 space-y-4">
-        <div className="grid grid-cols-1 gap-4">
+      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-6 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-0.5 block">Pilih Test</label>
+            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-1 block">1. Pilih Test Utama</label>
             <select 
               value={selectedExam}
               onChange={(e) => setSelectedExam(e.target.value)}
-              className="w-full neat-field"
+              className="w-full neat-field h-12 text-blue-600 font-bold"
             >
-              <option value="">- Silakan Pilih Tes Terlebih Dahulu -</option>
-              {exams.map(e => <option key={e.id} value={e.id}>{format(new Date(e.startTime), 'yyyy-MM-dd')} {e.name}</option>)}
+              <option value="">- Silakan Pilih Jenis Ujian -</option>
+              {exams.map(e => <option key={e.id} value={e.id}>{format(new Date(e.startTime), 'yyyy-MM-dd')} | {e.name}</option>)}
             </select>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-0.5 block">Waktu Mulai</label>
-              <input type="datetime-local" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="w-full neat-field" />
+               <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-1 block">2. Filter Sekolah</label>
+               <select value={selectedSchool} onChange={(e) => setSelectedSchool(e.target.value)} className="w-full neat-field h-12">
+                 <option value="">- Semua Sekolah -</option>
+                 {schoolGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+               </select>
             </div>
             <div>
-              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-0.5 block">Waktu Selesai</label>
-              <input type="datetime-local" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="w-full neat-field" />
+               <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-1 block">3. Filter Kelas</label>
+               <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} className="w-full neat-field h-12">
+                 <option value="">- Semua Kelas -</option>
+                 {classGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+               </select>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div>
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-0.5 block">Pilih Group</label>
-                <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} className="w-full neat-field">
-                  <option value="">- Semua Group -</option>
-                  {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                </select>
-             </div>
-             <div>
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-0.5 block">Statistik</label>
-                <select className="w-full neat-field">
-                  <option value="none">Tidak Aktif</option>
-                  <option value="active">Sedang Mengerjakan</option>
-                </select>
-             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-           <label className="flex items-center gap-2 cursor-pointer group">
-              <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-0" />
-              <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-700 transition-colors uppercase tracking-wider">Tampilkan Grafik Analisa</span>
-           </label>
-            <div className="flex items-center gap-3">
-               <div className="flex items-center gap-2 mr-2">
-                 <span className="text-[10px] font-bold text-slate-400 uppercase">Tampilkan:</span>
-                 <select 
-                   value={itemsPerPage} 
-                   onChange={(e) => setItemsPerPage(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
-                   className="h-8 pl-2 pr-6 border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 outline-none focus:border-blue-500 bg-white"
-                 >
-                   <option value={10}>10</option>
-                   <option value={25}>25</option>
-                   <option value={50}>50</option>
-                   <option value="all">Semua</option>
-                 </select>
-               </div>
-               <button 
-                 onClick={handleFilter}
-                 className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center gap-2"
-               >
-                 <Filter className="w-3.5 h-3.5" /> Tampilkan Hasil
-               </button>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-50 pt-4">
+          <div>
+            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-0.5 block">Waktu Mulai</label>
+            <input type="datetime-local" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="w-full neat-field" />
+          </div>
+          <div>
+            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-0.5 block">Waktu Selesai</label>
+            <input type="datetime-local" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="w-full neat-field" />
+          </div>
+          <div>
+             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-0.5 block">Group Lain (Opsional)</label>
+             <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} className="w-full neat-field">
+               <option value="">- Semua Group -</option>
+               {otherGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+             </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-100 pt-4 items-end">
+             <div>
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1 mb-0.5 block">Status Pengerjaan</label>
+                <select className="w-full neat-field">
+                  <option value="none">Semua Status</option>
+                  <option value="active">Sedang Mengerjakan</option>
+                  <option value="completed">Sudah Selesai</option>
+                </select>
+             </div>
+             <div className="flex items-center gap-2 pb-2">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-0" />
+                  <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-700 transition-colors uppercase tracking-wider">Grafik Analisa</span>
+                </label>
+             </div>
+             <div className="flex items-center justify-end gap-3">
+                <div className="flex items-center gap-2 mr-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Per Halaman:</span>
+                  <select 
+                    value={itemsPerPage} 
+                    onChange={(e) => setItemsPerPage(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                    className="h-8 pl-2 pr-6 border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 outline-none focus:border-blue-500 bg-white"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value="all">Semua</option>
+                  </select>
+                </div>
+                <button 
+                  onClick={handleFilter}
+                  className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center gap-2"
+                >
+                  <Filter className="w-3.5 h-3.5" /> Tampilkan
+                </button>
+             </div>
         </div>
       </div>
 

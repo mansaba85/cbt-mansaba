@@ -15,23 +15,22 @@ model User {
   email     String?      @unique
   level     UserLevel    @default(STUDENT)
   levelInt  Int          @default(1)
-  groupId   Int?
   notes     String?      @db.Text
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
   results   ExamResult[]
   sessions  Session[]
-  group     Group?       @relation(fields: [groupId], references: [id])
+  groups    Group[]      @relation("usergroups")
 
-  @@index([groupId], map: "users_groupId_fkey")
   @@map("users")
 }
 
 model Group {
-  id    Int    @id @default(autoincrement())
-  name  String @unique
-  users User[]
-  exams Exam[] @relation("examgroups")
+  id       Int    @id @default(autoincrement())
+  name     String @unique
+  category String @default("GENERAL") // SCHOOL, CLASS, SUBJECT, etc.
+  users    User[] @relation("usergroups")
+  exams    Exam[] @relation("examgroups")
 
   @@map("groups")
 }
@@ -117,6 +116,7 @@ model Exam {
   scoreToLiveScore Boolean         @default(false)
   isHighVariation  Boolean         @default(false)
   testComment      String?         @db.Text
+  targetRulesJson  String?         @db.Text
   createdAt        DateTime        @default(now())
   results          ExamResult[]
   topicRules       TestTopicRule[]

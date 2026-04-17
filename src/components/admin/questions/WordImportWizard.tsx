@@ -95,7 +95,8 @@ const WordImportWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }) 
       
       const isMetadata = /MODULE\s*:=|TOPIC\s*:=/i.test(text);
       const html = el.innerHTML;
-      const numMatch = text.match(/^\s*(?:Q\s*:?\s*)?(\d+)[\.\)]\s*/i);
+      // Regex yang mendukung 1. , 1) , Q:1. , Q:1)
+      const numMatch = text.match(/^\s*(?:Q\s*:?\s*)?(\d+)(?:[\.\)]|[:]\)?)\s*/i);
       const isListItem = el.tagName === 'LI';
       const listStyle = (el.parentElement?.getAttribute('type') || el.parentElement?.style.listStyleType || '').toLowerCase();
       const isAlphaList = listStyle.includes('a') || listStyle.includes('alpha') || listStyle.includes('latin');
@@ -142,7 +143,13 @@ const WordImportWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }) 
           startNew = true;
           lockStandby = true;
       } else if (!isMatchingLocked && isNumericList && !isMetadata) {
-          startNew = true;
+          // Hanya start new jika bukan bagian dari sub-numbering (isian soal menjodohkan)
+          const isExplicitQ = /Q\s*:/i.test(text);
+          const isSequential = (parseInt(numMatch![1], 10) === currentQuestionNum);
+          
+          if (isExplicitQ || isSequential || currentBlock.length === 0 || hasOptionsOrRight) {
+            startNew = true;
+          }
       }
 
       if (startNew && currentBlock.trim()) {
@@ -179,7 +186,7 @@ const WordImportWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }) 
         const hasSubNumbers = /\d+\.\s+.*?/s.test(block.replace(/^\s*\d+[\.\)]/, '')); 
         const isMatching = /\[\[QTYPE\s*-\s*MATCHING\]\]/i.test(block) || /jodohkan|pasangkan|pasangan/i.test(block) || (hasSubNumbers && !isOrdering);
         
-        const optionSplitRegex = /(^|[^a-zA-Z0-9])([a-eA-E])[\.\:]\s*[\)\s]*/g;
+        const optionSplitRegex = /(^|[^a-zA-Z0-9])([a-eA-E])[\.\:\)]\s*[\)\s]*/g;
         let normalizedBlock = block.replace(optionSplitRegex, (match, prefix, char) => `${prefix} [[OPT_${char.toUpperCase()}]] `);
         const parts = normalizedBlock.split(/\[\[OPT_[A-Z]\]\]/);
         const hasOptions = parts.length > 1;
@@ -218,13 +225,14 @@ const WordImportWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }) 
         else if (isOrdering) finalType = 'ORDERING';
         else if (isMatching && !isSingleLetter) finalType = 'MATCHING';
         else if (answer.includes(',')) finalType = 'MCMA';
+        else if (processedOptions.length === 1) finalType = 'FIB';
 
         return {
           question: questionContent, options: processedOptions, answer, type: finalType,
           difficulty: difficulty ? parseInt(difficulty) : 1, timer: timer ? parseInt(timer) : 0,
           autoNext: /\[\[AUTONEXT\]\]/i.test(block), noRandom: /\[\[NO_RANDOM\]\]/i.test(block),
           maxSel: block.match(/\[\[MAX_SEL\s*=\s*(\d+)\]\]/i)?.[1] ? parseInt(block.match(/\[\[MAX_SEL\s*=\s*(\d+)\]\]/i)?.[1] || "1") : 1,
-          similarity: /\[\[SIMILARITY_CORRECTION\]\]/i.test(block),
+          similarity: /\[\[SIMILARITY_CORRECTION\]\]/i.test(block) || finalType === 'FIB',
           mcmaHeader: block.match(/\[\[MCMA_HEADER\s*:=\s*(.*?)\]\]/i)?.[1] ? (block.match(/\[\[MCMA_HEADER\s*:=\s*(.*?)\]\]/i)?.[1] || "").split(',') : [],
         };
     }).filter(q => q.question.replace(/<\/?[^>]+(>|$)/g, "").trim().length > 3 || q.question.includes('<img'));

@@ -29,6 +29,28 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 
+// Utility for Text Similarity (FIB Questions)
+function getLevenshteinDistance(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1)
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
 // ===== AUTHENTICATION =====
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
@@ -465,30 +487,84 @@ app.post('/api/proctoring/:id/action', async (req, res) => {
 // Get active exams for students
 app.get('/api/exams/active', async (req, res) => {
   if (!prisma) return res.json([]);
-  const userId = parseInt(req.query.userId as string);
+  const uId = req.query.userId as string;
+  const isAll = req.query.all === 'true';
+  
+  if (!isAll && !uId) return res.json([]);
   
   try {
     const now = new Date();
-    // Cari ujian yang sedang aktif saat ini
+    let userGroupIds: number[] = [];
+    const userId = uId ? parseInt(uId) : 0;
+
+    if (!isAll) {
+      const user = await prisma.user.findUnique({
+         where: { id: userId },
+         include: { groups: true }
+      });
+      if (!user) return res.json([]);
+      userGroupIds = user.groups.map(g => g.id);
+    }
+
+    // 2. Fetch all enabled exams within time range
     const exams = await prisma.exam.findMany({
       where: {
         enabled: true,
         startTime: { lte: now },
-        endTime: { gte: now }
+        endTime: { gte: now },
+        // If isAll, return all active exams. Otherwise filter by user groups.
+        OR: isAll ? undefined : [
+            { groups: { none: {} } },
+            { groups: { some: { id: { in: userGroupIds } } } }
+        ]
       },
       include: {
+        groups: true,
         topicRules: {
             include: { subject: true }
         },
-        results: userId ? {
-            where: { userId },
+        results: {
+            where: { userId: userId || 0 }, // Using provided userId or dummy 0 for preview
             orderBy: { startedAt: 'desc' },
             take: 1
-        } : false
+        }
       }
     });
 
-    const formatted = exams.map((e: any) => {
+    // 3. Filter exams based on Precision Targeting Rules
+    const eligibleExams = exams.filter((e: any) => {
+       const rules = JSON.parse(e.targetRulesJson || '[]');
+       if (rules.length === 0) {
+          // Fallback to simple group intersection if no rules (old behavior/direct assignment)
+          const examGroups = e.groups || [];
+          if (examGroups.length === 0) return true;
+
+          const examSchools = examGroups.filter((g: any) => g.category === 'SCHOOL').map((g: any) => g.id);
+          const examClasses = examGroups.filter((g: any) => g.category === 'CLASS').map((g: any) => g.id);
+          const examSubjects = examGroups.filter((g: any) => g.category === 'SUBJECT' || g.category === 'GENERAL').map((g: any) => g.id);
+
+          const schoolMatch = examSchools.length === 0 || examSchools.some((id: number) => userGroupIds.includes(id));
+          const classMatch = examClasses.length === 0 || examClasses.some((id: number) => userGroupIds.includes(id));
+          const subjectMatch = examSubjects.length === 0 || examSubjects.some((id: number) => userGroupIds.includes(id));
+
+          return schoolMatch && classMatch && subjectMatch;
+       }
+
+       // --- ADVANCED RULE MATCHING (OR logic between rules, AND logic within rule) ---
+       return rules.some((rule: any) => {
+          // A rule MUST match School AND Class AND Subject (if specified)
+          // Support both array 'schoolIds' (new) and single 'schoolId' (legacy)
+          const schoolIds = rule.schoolIds || (rule.schoolId ? [rule.schoolId] : []);
+          const schoolMatch = schoolIds.length === 0 || schoolIds.some((id: number) => userGroupIds.includes(id));
+          
+          const classMatch = rule.classIds.length === 0 || rule.classIds.some((id: number) => userGroupIds.includes(id));
+          const subjectMatch = rule.subjectIds.length === 0 || rule.subjectIds.some((id: number) => userGroupIds.includes(id));
+
+          return schoolMatch && classMatch && subjectMatch;
+       });
+    });
+
+    const formatted = eligibleExams.map((e: any) => {
       const totalQ = e.topicRules.reduce((acc: number, r: any) => acc + r.questionCount, 0);
       const latestResult = e.results?.[0];
 
@@ -514,7 +590,7 @@ app.get('/api/exams/active', async (req, res) => {
     });
     res.json(formatted);
   } catch(e) {
-    console.error(e);
+    console.error('Fetch Active Exams Error:', e);
     res.status(500).json([]);
   }
 });
@@ -607,7 +683,8 @@ app.get('/api/exams/:id', async (req, res) => {
   const { id } = req.params;
   try {
     const exam = await prisma.exam.findUnique({
-      where: { id: parseInt(id) }
+      where: { id: parseInt(id) },
+      include: { topicRules: true }
     });
     res.json(exam);
   } catch (e) {
@@ -711,6 +788,30 @@ async function calculateScoreForExamResult(resultId: number) {
                 totalScore += basePoints;
             } else {
                 totalScore -= wrongPoints;
+            }
+        } else if (type === 'FIB' || type === 'fib') {
+            const rightAns = displayAnswers.find(a => a.isRight);
+            if (rightAns && studentAns) {
+                const s1 = studentAns.toString().trim().toLowerCase();
+                const s2 = rightAns.content.toString().trim().toLowerCase();
+                
+                if (s1 === s2) {
+                    totalScore += basePoints;
+                } else if (q.similarity) {
+                    const distance = getLevenshteinDistance(s1, s2);
+                    const maxLen = Math.max(s1.length, s2.length);
+                    const similarity = maxLen === 0 ? 1 : (maxLen - distance) / maxLen;
+                    
+                    // Threshold minimal 70% kemiripan untuk mendapatkan poin parsial
+                    if (similarity >= 0.7) {
+                        totalScore += (similarity * basePoints);
+                    }
+                }
+            }
+        } else if (type === 'ESSAY') {
+            // Manual grade from GradingManager
+            if (studentAns && typeof studentAns.manualScore === 'number') {
+                totalScore += studentAns.manualScore;
             }
         } else if (type === 'ORDERING' || type === 'MATCHING') {
             // studentAns is an object: {"A": "1", "B": "2"}
@@ -1324,63 +1425,120 @@ app.patch('/api/questions/:id/quick-toggle-answer', async (req, res) => {
 // BULK IMPORT Users
 app.post('/api/users/bulk-import', async (req, res) => {
   const { users } = req.body;
+  if (!users || !Array.isArray(users)) return res.status(400).json({ success: false, error: 'Data tidak valid' });
+
   try {
-    const results = await Promise.all(
-      users.map(async (u: any) => {
-        // 1. Get or Create Group
-        let group = null;
-        if (u.grup) {
-          group = await prisma.group.upsert({
-            where: { name: u.grup },
-            update: {},
-            create: { name: u.grup }
+    // 1. Pre-process Unique Groups to avoid Race Conditions
+    const groupCache = new Map<string, number>();
+
+    const getGroupId = async (name: string, category: string) => {
+      if (!name || name.trim() === '') return null;
+      const cleanName = name.trim();
+      const cacheKey = `${category}:${cleanName}`;
+      
+      if (groupCache.has(cacheKey)) return groupCache.get(cacheKey);
+
+      // Check DB
+      let g = await prisma.group.findUnique({ where: { name: cleanName } });
+      if (!g) {
+        // Create if not exists
+        try {
+          g = await prisma.group.create({
+            data: { name: cleanName, category }
           });
+        } catch (e) {
+          // If race condition happens, try to fetch again
+          g = await prisma.group.findUnique({ where: { name: cleanName } });
         }
+      }
+      
+      if (g) {
+        groupCache.set(cacheKey, g.id);
+        return g.id;
+      }
+      return null;
+    };
 
-        // 2. Map Level
-        let level: any = 'STUDENT';
-        let lv = parseInt(u.level_user);
-        
-        if (isNaN(lv)) {
-            const lvlStr = String(u.level_user).toLowerCase();
-            if (lvlStr.includes('admin')) { lv = 10; level = 'ADMIN'; }
-            else if (lvlStr.includes('proctor') || lvlStr.includes('proktor')) { lv = 7; level = 'PROCTOR'; }
-            else if (lvlStr.includes('guru') || lvlStr.includes('teacher')) { lv = 5; level = 'TEACHER'; }
-            else { lv = 1; level = 'STUDENT'; }
-        } else {
-            if (lv >= 10) level = 'ADMIN';
-            else if (lv >= 7) level = 'PROCTOR';
-            else if (lv >= 5) level = 'TEACHER';
-            else { lv = 1; level = 'STUDENT'; }
+    // 2. Process Users sequentially to avoid DB pool issues and ensure groups are ready
+    const results = [];
+    for (const u of users) {
+      if (!u.username) continue;
+      
+      const targetGroupIds: number[] = [];
+      
+      // Get IDs for School, Class, and Subjects
+      const sid = await getGroupId(u.madrasah, 'SCHOOL');
+      const cid = await getGroupId(u.kelas, 'CLASS');
+      if (sid) targetGroupIds.push(sid);
+      if (cid) targetGroupIds.push(cid);
+
+      if (u.peminatan) {
+        const subNames = u.peminatan.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s !== '');
+        for (const sName of subNames) {
+          const gid = await getGroupId(sName, 'SUBJECT');
+          if (gid) targetGroupIds.push(gid);
         }
+      }
 
-        // 3. Create User (Skip if username exists)
-        return prisma.user.upsert({
-          where: { username: u.username },
-          update: {
-            fullName: u.nama,
-            password: u.password,
-            level: level,
-            levelInt: lv,
-            groupId: group?.id,
-            notes: u.keterangan
-          },
-          create: {
-            username: u.username,
-            password: u.password,
-            fullName: u.nama,
-            level: level,
-            levelInt: lv,
-            groupId: group?.id,
-            notes: u.keterangan || ''
+      // Legacy support
+      if (u.grup && u.grup !== 'Default') {
+        const gid = await getGroupId(u.grup, 'GENERAL');
+        if (gid) targetGroupIds.push(gid);
+      }
+
+      // Map Level
+      let level: any = 'STUDENT';
+      let lv = parseInt(u.level_user);
+      if (isNaN(lv)) {
+          const lStr = String(u.level_user).toLowerCase();
+          if (lStr.includes('admin')) { lv = 10; level = 'ADMIN'; }
+          else if (lStr.includes('proctor') || lStr.includes('proktor')) { lv = 7; level = 'PROCTOR'; }
+          else if (lStr.includes('guru') || lStr.includes('teacher')) { lv = 5; level = 'TEACHER'; }
+          else { lv = 1; level = 'STUDENT'; }
+      } else {
+          if (lv >= 10) level = 'ADMIN';
+          else if (lv >= 7) level = 'PROCTOR';
+          else if (lv >= 5) level = 'TEACHER';
+          else { lv = 1; level = 'STUDENT'; }
+      }
+
+      const userData: any = {
+          fullName: u.nama || u.username,
+          password: String(u.password || '123456'),
+          level,
+          levelInt: lv,
+          notes: u.keterangan || '',
+          groups: {
+              set: targetGroupIds.map(id => ({ id }))
           }
-        });
-      })
-    );
+      };
+
+      const savedUser = await prisma.user.upsert({
+        where: { username: String(u.username) },
+        update: {
+          ...userData,
+          groups: {
+            set: Array.from(new Set(targetGroupIds)).map(id => ({ id }))
+          }
+        },
+        create: {
+          username: String(u.username),
+          ...userData,
+          groups: {
+            connect: Array.from(new Set(targetGroupIds)).map(id => ({ id }))
+          }
+        }
+      });
+      results.push(savedUser);
+    }
+
     res.json({ success: true, count: results.length });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, error: 'Gagal impor pengguna' });
+  } catch (error: any) {
+    console.error('Bulk Import Final Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Gagal impor pengguna: ' + (error.message || 'Error internal server') 
+    });
   }
 });
 
@@ -1400,13 +1558,28 @@ app.get('/api/groups', async (req, res) => {
 
 // CREATE Group
 app.post('/api/groups', async (req, res) => {
-  const { name } = req.body;
+  const { name, category } = req.body;
   try {
-    const group = await prisma.group.create({ data: { name } });
+    const group = await prisma.group.create({ data: { name, category: category || 'GENERAL' } });
     res.json({ success: true, group });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Gagal membuat grup' });
   }
+});
+
+// UPDATE Group
+app.put('/api/groups/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name, category } = req.body;
+    try {
+        const group = await prisma.group.update({
+            where: { id: parseInt(id) },
+            data: { name, category }
+        });
+        res.json({ success: true, group });
+    } catch (e) {
+        res.status(500).json({ error: 'Gagal update grup' });
+    }
 });
 
 // DELETE Group
@@ -1425,8 +1598,10 @@ app.get('/api/users', async (req, res) => {
   const { groupId } = req.query;
   try {
     const users = await prisma.user.findMany({
-      where: groupId ? { groupId: parseInt(groupId as string) } : {},
-      include: { group: true },
+      where: groupId ? { 
+          groups: { some: { id: parseInt(groupId as string) } } 
+      } : {},
+      include: { groups: true },
       orderBy: { createdAt: 'desc' }
     });
     res.json(users);
@@ -1443,7 +1618,9 @@ app.get('/api/results', async (req, res) => {
   try {
     const where: any = {};
     if (examId) where.examId = parseInt(examId as string);
-    if (groupId) where.user = { groupId: parseInt(groupId as string) };
+    if (groupId) where.user = { 
+        groups: { some: { id: parseInt(groupId as string) } } 
+    };
     
     if (dateStart || dateEnd) {
       where.startedAt = {};
@@ -1454,10 +1631,8 @@ app.get('/api/results', async (req, res) => {
     const results = await prisma.examResult.findMany({
       where,
       include: {
-        user: {
-          include: { group: true }
-        },
-        exam: true
+        exam: true,
+        user: { include: { groups: true } }
       },
       orderBy: { startedAt: 'desc' }
     });
@@ -1486,7 +1661,7 @@ app.get('/api/results', async (req, res) => {
         testName: r.exam?.name || 'Unknown',
         username: r.user?.username || 'Unknown',
         fullName: r.user?.fullName || 'Unknown',
-        groups: r.user?.group ? [r.user.group.name] : ['Default'],
+        groups: r.user?.groups ? r.user.groups.map((g: any) => g.name) : ['Default'],
         points: r.score, 
         score: Math.round(r.score), 
         status: r.status // Return raw status: ONGOING, COMPLETED, SUSPENDED
@@ -1578,7 +1753,7 @@ app.get('/api/results/:id/review', async (req, res) => {
     const result = await prisma.examResult.findUnique({
       where: { id: resultId },
       include: {
-        user: { include: { group: true } },
+        user: { include: { groups: true } },
         exam: {
           include: {
             topicRules: { include: { subject: true } }
@@ -1740,16 +1915,16 @@ app.get('/api/exams/:id/attendance', async (req, res) => {
     // 3. Get All Students in those Groups
     const allStudents = await prisma.user.findMany({
       where: { 
-        groupId: { in: targetGroupIds },
+        groups: { some: { id: { in: targetGroupIds } } },
         level: 'STUDENT'
       },
-      include: { group: true }
+      include: { groups: true }
     });
 
     // 4. Get Existing Results for this Exam
     const results = await prisma.examResult.findMany({
       where: { examId: parseInt(id) },
-      select: { userId: true, status: true }
+      include: { user: { include: { groups: true } } }
     });
 
     const presentUserIds = new Set(results.map(r => r.userId));
@@ -1775,7 +1950,7 @@ app.get('/api/exams/:id/attendance', async (req, res) => {
         id: s.id,
         username: s.username,
         name: s.fullName,
-        group: s.group?.name || '--'
+        group: s.groups.map((g: any) => g.name).join(', ')
       }))
     });
 
@@ -1813,10 +1988,10 @@ app.get('/api/attendance/recap', async (req, res) => {
 
     const students = await prisma.user.findMany({
       where: { 
-        groupId: { in: targetGroupIds },
+        groups: { some: { id: { in: targetGroupIds } } },
         level: 'STUDENT'
       },
-      include: { group: true },
+      include: { groups: true },
       orderBy: { fullName: 'asc' }
     });
 
@@ -1848,7 +2023,7 @@ app.get('/api/attendance/recap', async (req, res) => {
             id: s.id,
             name: s.fullName,
             username: s.username,
-            group: s.group?.name || '--',
+            group: s.groups.map((g: any) => g.name).join(', '),
             attendance,
             missedCount
         };
@@ -1895,7 +2070,9 @@ app.post('/api/users', async (req, res) => {
         fullName: data.fullName,
         level: level,
         levelInt: levelInt,
-        groupId: data.groupId ? parseInt(data.groupId) : null,
+        groups: {
+            connect: (data.groupIds || []).map((id: number) => ({ id }))
+        }
       }
     });
     res.json({ success: true, user });
@@ -1924,8 +2101,10 @@ app.put('/api/users/:id', async (req, res) => {
       else updateData.level = 'STUDENT';
     }
 
-    if (data.groupId !== undefined) {
-      updateData.groupId = data.groupId ? parseInt(data.groupId) : null;
+    if (data.groupIds !== undefined) {
+      updateData.groups = {
+          set: (data.groupIds || []).map((id: number) => ({ id }))
+      };
     }
 
     const user = await prisma.user.update({
@@ -1943,10 +2122,17 @@ app.put('/api/users/:id', async (req, res) => {
 app.delete('/api/users/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    await prisma.user.delete({ where: { id: parseInt(id) } });
+    const userId = parseInt(id);
+    // Cascade delete related data
+    await prisma.$transaction([
+      prisma.session.deleteMany({ where: { userId } }),
+      prisma.examResult.deleteMany({ where: { userId } }),
+      prisma.user.delete({ where: { id: userId } }),
+    ]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, error: 'Gagal hapus user' });
+    console.error('Delete User Error:', err);
+    res.status(500).json({ success: false, error: 'Gagal hapus user (mungkin karena data terkait)' });
   }
 });
 
@@ -2198,12 +2384,16 @@ const getDbConfig = () => {
 app.get('/api/backups', (req, res) => {
     try {
         const files = fs.readdirSync(BACKUP_DIR);
-        const backups = files.filter(f => f.endsWith('.sql')).map((f, i) => {
+        const backups = files.filter(f => f.endsWith('.sql') || f.endsWith('.zip')).map((f, i) => {
             const stats = fs.statSync(path.join(BACKUP_DIR, f));
+            let type: string = 'database';
+            if (f.includes('full')) type = 'full';
+            else if (f.includes('files')) type = 'files';
+
             return {
                 id: i + 1,
                 filename: f,
-                type: 'database',
+                type: type,
                 size: (stats.size / 1024 / 1024).toFixed(2) + ' MB',
                 createdAt: stats.birthtime.toLocaleString('sv-SE').replace('T', ' '),
                 status: 'success'
@@ -2298,11 +2488,29 @@ app.post('/api/backups/restore', upload.single('backupFile'), (req, res) => {
     let sqlFileToRestore = originalFilepath;
     let tempExtractDir = '';
 
-    const performRestore = (sqlPath: string) => {
+    const performRestore = (sqlPath: string, extractDir?: string) => {
         const passPart = config.pass ? `-p${config.pass}` : '';
         const cmd = `${MYSQL_EXE} -u ${config.user} ${passPart} -h ${config.host} --port=${config.port} ${config.db} < "${sqlPath}"`;
 
         exec(cmd, (error, stdout, stderr) => {
+            if (!error && extractDir) {
+                // If we have an extraction directory, restore folders
+                try {
+                    const folders = ['uploads', 'public'];
+                    folders.forEach(folder => {
+                        const src = path.join(extractDir, folder);
+                        const dest = path.join(process.cwd(), folder);
+                        if (fs.existsSync(src)) {
+                             // Use xcopy or similar on windows, or just fs.cp
+                             // Using fs.cpSync (Node 16.7+) is the safest way
+                             fs.cpSync(src, dest, { recursive: true });
+                        }
+                    });
+                } catch (folderErr) {
+                    console.error('Folder Restore Error:', folderErr);
+                }
+            }
+
             // Final Cleanup
             try {
                 if (fs.existsSync(originalFilepath)) fs.unlinkSync(originalFilepath);
@@ -2321,12 +2529,13 @@ app.post('/api/backups/restore', upload.single('backupFile'), (req, res) => {
 
     if (isZip) {
         // If ZIP, extract the SQL file first
-        tempExtractDir = path.join(process.cwd(), 'uploads', 'temp_restore_' + Date.now());
-        if (!fs.existsSync(tempExtractDir)) fs.mkdirSync(tempExtractDir);
+        tempExtractDir = path.join(process.cwd(), 'backups', 'temp_restore_' + Date.now());
+        if (!fs.existsSync(tempExtractDir)) fs.mkdirSync(tempExtractDir, { recursive: true });
 
         const extractCmd = `tar -xf "${originalFilepath}" -C "${tempExtractDir}"`;
         exec(extractCmd, (eErr) => {
             if (eErr) {
+                console.error('Extract Error:', eErr);
                 return res.status(500).json({ error: 'Gagal mengekstrak file ZIP' });
             }
             // Find the SQL file inside the extracted folder
@@ -2335,11 +2544,47 @@ app.post('/api/backups/restore', upload.single('backupFile'), (req, res) => {
             if (!sqlFile) {
                 return res.status(400).json({ error: 'Tidak ditemukan file database (.sql) di dalam ZIP' });
             }
-            performRestore(path.join(tempExtractDir, sqlFile));
+            performRestore(path.join(tempExtractDir, sqlFile), tempExtractDir);
         });
     } else {
         performRestore(originalFilepath);
     }
+});
+
+// Get unique group pairings (Schools vs Classes) for smart UI
+app.get('/api/groups/mappings', async (req, res) => {
+  if (!prisma) return res.json({});
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        groups: {
+          select: { id: true, category: true }
+        }
+      }
+    });
+
+    const schoolToClasses: Record<number, Set<number>> = {};
+    
+    users.forEach(u => {
+      const schools = u.groups.filter(g => g.category === 'SCHOOL').map(g => g.id);
+      const classes = u.groups.filter(g => g.category === 'CLASS').map(g => g.id);
+      
+      schools.forEach(sId => {
+        if (!schoolToClasses[sId]) schoolToClasses[sId] = new Set();
+        classes.forEach(cId => schoolToClasses[sId].add(cId));
+      });
+    });
+
+    // Convert Sets to Arrays for JSON
+    const result: Record<number, number[]> = {};
+    for (const sId in schoolToClasses) {
+      result[sId] = Array.from(schoolToClasses[sId]);
+    }
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({});
+  }
 });
 
 const PORT = 3001;

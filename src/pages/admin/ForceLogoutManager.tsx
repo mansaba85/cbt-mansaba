@@ -43,8 +43,10 @@ const ForceLogoutManager: React.FC = () => {
   const fetchProctoringData = async () => {
     try {
       const res = await fetch('http://localhost:3001/api/proctoring');
-      const data = await res.json();
-      setStudents(data);
+      if (res.ok) {
+        const data = await res.json();
+        setStudents(Array.isArray(data) ? data : []);
+      }
     } catch (e) {
       console.error("Gagal memuat data proctoring");
     }
@@ -94,23 +96,27 @@ const ForceLogoutManager: React.FC = () => {
     setIsLoading(false);
   };
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  const toggleSelect = (id: any) => {
+    const sId = id.toString();
+    setSelectedIds(prev => prev.includes(sId) ? prev.filter(i => i !== sId) : [...prev, sId]);
   };
 
   const toggleSelectAll = () => {
-    const listIds = filteredStudents.filter(s => s.status !== 'locked').map(s => s.id);
+    const listIds = filteredStudents.filter(s => s.status !== 'locked').map(s => s.id.toString());
     if (selectedIds.length === listIds.length) setSelectedIds([]);
     else setSelectedIds(listIds);
   };
 
   const filteredStudents = students.filter(s => {
+    if (!s) return false;
+    const sName = (s.name || '').toLowerCase();
+    const sNis = (s.nis || '').toLowerCase();
     const matchGroup = selectedGroup ? s.group === selectedGroup : true;
-    const matchSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.nis.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchSearch = sName.includes(searchQuery.toLowerCase()) || sNis.includes(searchQuery.toLowerCase());
     return matchGroup && matchSearch;
   });
 
-  const allGroups = Array.from(new Set(students.map(s => s.group))).sort();
+  const allGroups = Array.from(new Set(students.map(s => s?.group).filter(Boolean))).sort() as string[];
 
   return (
     <div className="space-y-5 pb-20 animate-in fade-in duration-500">
@@ -169,8 +175,11 @@ const ForceLogoutManager: React.FC = () => {
           <Lock className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Logout & Kunci Paksa</h1>
-          <p className="text-xs text-slate-500">Kunci paksa siswa yang sedang aktif ujian</p>
+          <h1 className="text-xl font-bold text-slate-900 leading-none">Logout & Kunci Paksa</h1>
+          <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider mt-1.5 flex items-center gap-2">
+             <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
+             Security & Emergency Access Management
+          </p>
         </div>
       </div>
 
@@ -236,7 +245,7 @@ const ForceLogoutManager: React.FC = () => {
                 <td className="px-4 py-3">
                   {!student.isLocked && (
                     <button onClick={() => toggleSelect(student.id)} className="text-slate-400 hover:text-indigo-600 transition-colors">
-                      {selectedIds.includes(student.id)
+                      {selectedIds.includes(student.id.toString())
                         ? <CheckSquare className="w-4 h-4 text-indigo-600" />
                         : <Square className="w-4 h-4" />}
                     </button>
@@ -247,16 +256,16 @@ const ForceLogoutManager: React.FC = () => {
                 <td className="px-3 py-3 font-bold text-slate-800 uppercase text-xs">{student.name}</td>
                 <td className="px-3 py-3 text-center">
                   <span className="w-8 h-8 inline-flex items-center justify-center bg-indigo-600 text-white text-[10px] font-black rounded-lg">
-                    {student.group.split('.')[0] || 'ST'}
+                    {(student?.group || '').split('.')[0] || 'ST'}
                   </span>
                 </td>
                 <td className="px-3 py-3">
-                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded border border-slate-200">{student.group}</span>
+                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded border border-slate-200">{student?.group || '-'}</span>
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex flex-col gap-1">
-                    <span className={`px-2 py-0.5 text-white text-[10px] font-bold rounded w-fit ${student.status === 'online' ? 'bg-amber-500' : student.status === 'finished' ? 'bg-emerald-600' : 'bg-rose-600'}`}>
-                      {student.status === 'online' ? `Sedang: ${student.testName}` : student.status === 'finished' ? `Selesai: ${student.testName}` : 'TERKUNCI'}
+                    <span className={`px-2 py-0.5 text-white text-[10px] font-bold rounded w-fit ${student?.status === 'online' ? 'bg-amber-500' : student?.status === 'finished' ? 'bg-emerald-600' : 'bg-rose-600'}`}>
+                      {student?.status === 'online' ? `Sedang: ${student?.testName || 'Ujian'}` : student?.status === 'finished' ? `Selesai: ${student?.testName || 'Ujian'}` : 'TERKUNCI'}
                     </span>
                   </div>
                 </td>

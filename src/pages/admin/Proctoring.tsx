@@ -108,12 +108,15 @@ function StudentCard({
       <div className={`p-4 rounded-2xl border transition-all relative ${cardBg} ${openDropdown === student.id ? 'z-50' : 'z-0'}`}>
         <div className="flex justify-between items-start mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full font-black text-white flex items-center justify-center shadow-inner" style={{ backgroundColor: `hsl(${student.name.length * 20}, 70%, 60%)`}}>
-              {student.name.charAt(0)}
+            <div 
+              className="w-10 h-10 rounded-full font-black text-white flex items-center justify-center shadow-inner" 
+              style={{ backgroundColor: `hsl(${(student?.name?.length || 0) * 20}, 70%, 60%)` }}
+            >
+              {student?.name?.charAt(0) || '?'}
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-sm leading-tight">{student.name}</h3>
-              <p className="text-xs font-semibold text-slate-500">{student.nis}</p>
+              <h3 className="font-bold text-slate-800 text-sm leading-tight">{student?.name || 'Peserta'}</h3>
+              <p className="text-xs font-semibold text-slate-500">{student?.nis || '-'}</p>
             </div>
           </div>
           
@@ -198,9 +201,13 @@ export default function Proctoring() {
   const fetchLiveProctoring = async () => {
     try {
       const res = await fetch('http://localhost:3001/api/proctoring');
-      const data = await res.json();
-      setStudents(data);
-    } catch(e) { }
+      if (res.ok) {
+        const data = await res.json();
+        setStudents(Array.isArray(data) ? data : []);
+      }
+    } catch(e) { 
+      console.error("Fetch Live Proctoring failed", e);
+    }
   };
 
   React.useEffect(() => {
@@ -216,7 +223,7 @@ export default function Proctoring() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [openDropdown]);
 
-  const availableGroups = Array.from(new Set(students.map(s => s.group))).sort();
+  const availableGroups = Array.from(new Set(students.map(s => s?.group).filter(Boolean))).sort();
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
 
   const activeCount = students.filter(s => s.status === 'online' || s.status === 'warning').length;
@@ -239,9 +246,13 @@ export default function Proctoring() {
   };
 
   const filteredStudents = students.filter(s => {
+    if (!s) return false;
     if (selectedGroup !== 'all' && s.group !== selectedGroup) return false;
-    const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.nis.includes(searchTerm);
-    const matchFilter = filterStatus === 'all' || s.status === filterStatus;
+    const sName = (s.name || '').toLowerCase();
+    const sNis = (s.nis || '');
+    const sStatus = (s.status || '');
+    const matchSearch = sName.includes(searchTerm.toLowerCase()) || sNis.includes(searchTerm);
+    const matchFilter = filterStatus === 'all' || sStatus === filterStatus;
     return matchSearch && matchFilter;
   });
 
@@ -251,8 +262,8 @@ export default function Proctoring() {
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">Pengawasan Langsung (Live Proctoring)</h1>
-          <p className="text-slate-500 font-medium mt-1">Pantau ujian tingkat kelas secara spesifik. Untuk menghemat memori alat perangkat Anda, data dimuat per ruang ujian.</p>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">Pengawasan Langsung</h1>
+          <p className="text-slate-600 font-medium mt-1">Pantau progres pengerjaan ujian siswa secara real-time.</p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <div className="relative border-2 border-indigo-200 bg-indigo-50 rounded-xl overflow-hidden shadow-sm">

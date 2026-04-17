@@ -36,28 +36,25 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ isAdminView = false
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        if (isAdminView) {
-          const res = await fetch('http://localhost:3001/api/subjects');
-          const data = await res.json();
-          setItems(Array.isArray(data) ? data.map((s: any) => ({
-            id: s.id,
-            name: s.name,
-            subject: s.module?.name || 'Materi',
-            duration: 60,
-            totalQuestions: s._count?.questions || 0,
-            status: 'available'
-          })) : []);
-        } else {
-          const userJson = localStorage.getItem('cbt_user');
-          let userId = '0';
-          if (userJson && userJson !== 'undefined') {
-            try { userId = JSON.parse(userJson).id || '0'; } catch(e){}
-          }
-          
-          const res = await fetch(`http://localhost:3001/api/exams/active?userId=${userId}`);
-          const data = await res.json();
-          setItems(Array.isArray(data) ? data : []);
+        const userJson = localStorage.getItem('cbt_user');
+        let userId = '0';
+        if (userJson && userJson !== 'undefined') {
+          try { userId = JSON.parse(userJson).id || '0'; } catch(e){}
         }
+
+        const url = isAdminView 
+          ? 'http://localhost:3001/api/exams/active?all=true'
+          : `http://localhost:3001/api/exams/active?userId=${userId}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        setItems(Array.isArray(data) ? data.map((e: any) => ({
+          ...e,
+          subject: e.topicRules?.[0]?.subject?.name || 'Materi Campuran',
+          totalQuestions: e.topicRules?.reduce((acc: number, r: any) => acc + (r.questionCount || 0), 0) || 0,
+          status: e.results?.[0]?.status?.toLowerCase() || 'available'
+        })) : []);
       } catch (err) {
         console.error("Gagal mengambil data:", err);
         setItems([]);
