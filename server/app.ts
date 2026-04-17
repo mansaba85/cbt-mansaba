@@ -29,6 +29,41 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 
+// ===== SESSION SLIDING EXPIRATION MIDDLEWARE =====
+app.use(async (req, res, next) => {
+    if (!prisma) return next();
+    
+    // Attempt to get token from header or query (for older client compatibility)
+    const token = req.headers['authorization']?.split(' ')[1] || req.query.token as string;
+    
+    if (token) {
+        try {
+            const session = await prisma.session.findUnique({
+                where: { token }
+            });
+
+            if (session) {
+                const now = new Date();
+                if (session.expiresAt < now) {
+                    // Expired - but we let the specific route handle 401 if needed
+                } else {
+                    // SLIDING EXPIRATION: Extend session by 1 hour on activity
+                    const newExpiry = new Date();
+                    newExpiry.setHours(newExpiry.getHours() + 1);
+                    
+                    await prisma.session.update({
+                        where: { id: session.id },
+                        data: { expiresAt: newExpiry }
+                    });
+                }
+            }
+        } catch (e) {
+            // Silently fail session extension
+        }
+    }
+    next();
+});
+
 // Utility for Text Similarity (FIB Questions)
 function getLevenshteinDistance(a: string, b: string): number {
   if (a.length === 0) return b.length;
@@ -93,7 +128,7 @@ app.post('/api/auth/login', async (req, res) => {
     // 3. Create Session Token
     const sessionToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // Session expires in 24 hours
+    expiresAt.setHours(expiresAt.getHours() + 1); // Session expires in 1 hour (More secure)
 
     if (!toggleSettings.enableMultiLogin && user.levelInt < 5) {
         // If multi-login is DISABLED, delete existing sessions for this student
@@ -1201,11 +1236,25 @@ app.post('/api/install/setup-admin', async (req, res) => {
   }
 });
 
-app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/install')) return next();
+app.use('/api', async (req, res, next) => {
+  if (req.path.startsWith('/install') || req.path === '/auth/login' || req.path === '/settings') return next();
   if (!process.env.DATABASE_URL || !prisma) {
     return res.status(503).json({ success: false, error: 'Aplikasi belum diinstall/dikonfigurasi.' });
   }
+
+  // Session Validation for non-public routes
+  const token = req.headers['authorization']?.split(' ')[1] || req.query.token as string;
+  if (!token) {
+    // We allow GET settings for branding, but other paths need token
+    if (req.method === 'GET' && (req.path === '/settings' || req.path === '/install/status')) return next();
+    return res.status(401).json({ success: false, error: 'Sesi berakhir, silakan login kembali.' });
+  }
+
+  const session = await prisma.session.findUnique({ where: { token } });
+  if (!session || session.expiresAt < new Date()) {
+    return res.status(401).json({ success: false, error: 'Sesi kadaluarsa.' });
+  }
+
   next();
 });
 // ===== END INSTALLATION WIZARD =====
