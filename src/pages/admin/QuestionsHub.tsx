@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
@@ -36,7 +37,7 @@ const QuestionsHub: React.FC<{initialImport?: boolean}> = ({ initialImport }) =>
 
   const fetchModules = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/modules');
+      const res = await fetch(`${API_BASE_URL}/api/modules`);
       const data = await res.json();
       setModules(data);
       if (data.length > 0 && !selectedModuleId) {
@@ -48,7 +49,7 @@ const QuestionsHub: React.FC<{initialImport?: boolean}> = ({ initialImport }) =>
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/settings');
+      const res = await fetch(`${API_BASE_URL}/api/settings`);
       const data = await res.json();
       if (data.cbt_institution_settings) setInstitution(data.cbt_institution_settings);
       if (data.cbt_logo_preview) setLogo(data.cbt_logo_preview);
@@ -58,7 +59,7 @@ const QuestionsHub: React.FC<{initialImport?: boolean}> = ({ initialImport }) =>
   const fetchQuestions = async (topicId: number) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/questions/${topicId}`);
+      const res = await fetch(`${API_BASE_URL}/api/questions/${topicId}`);
       const data = await res.json();
       setQuestions(data);
     } catch (err) { console.error(err); } finally { setIsLoading(false); }
@@ -133,7 +134,7 @@ const QuestionsHub: React.FC<{initialImport?: boolean}> = ({ initialImport }) =>
 
     // 2. Persistent Update (DB)
     try {
-      await fetch(`http://localhost:3001/api/questions/${qId}/quick-toggle-answer`, {
+      await fetch(`${API_BASE_URL}/api/questions/${qId}/quick-toggle-answer`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answerId: aId })

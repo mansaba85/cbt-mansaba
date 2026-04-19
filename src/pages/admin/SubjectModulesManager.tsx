@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
@@ -26,7 +27,7 @@ const SubjectModulesManager: React.FC = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:3001/api/modules');
+      const res = await fetch(`${API_BASE_URL}/api/modules`);
       const data = await res.json();
       setModules(data);
       if (data.length > 0 && !selectedModule) {
@@ -56,7 +57,7 @@ const SubjectModulesManager: React.FC = () => {
     if (!isConfirmed) return;
 
     try {
-      const res = await fetch(`http://localhost:3001/api/modules/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/api/modules/${id}`, { method: 'DELETE' });
       if (res.ok) {
           toast.success("Modul dan seluruh isinya berhasil dihapus");
           fetchData();
@@ -77,7 +78,7 @@ const SubjectModulesManager: React.FC = () => {
     if (!isConfirmed) return;
 
     try {
-      const res = await fetch(`http://localhost:3001/api/subjects/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/api/subjects/${id}`, { method: 'DELETE' });
       if (res.ok) {
           toast.success("Topik berhasil dihapus");
           fetchData();

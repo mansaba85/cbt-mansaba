@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { 
@@ -77,7 +78,7 @@ const ExamPage: React.FC = () => {
     try {
       const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
       const uId = userIdInt || user.id || 0;
-      const url = `http://localhost:3001/api/exams/${id}/questions?userId=${uId}${isPreview ? '&preview=true' : ''}`;
+      const url = `${API_BASE_URL}/api/exams/${id}/questions?userId=${uId}${isPreview ? '&preview=true' : ''}`;
         
       const res = await fetch(url);
       const data = await res.json();
@@ -94,7 +95,7 @@ const ExamPage: React.FC = () => {
 
           // AUTO-UNLOCK SYNC
           if (isCheatLocked && uId !== 0) {
-              const statusRes = await fetch(`http://localhost:3001/api/exams/active?userId=${uId}`);
+              const statusRes = await fetch(`${API_BASE_URL}/api/exams/active?userId=${uId}`);
               const activeExams = await statusRes.json();
               const thisExam = activeExams.find((e: any) => e.id === parseInt(id || '0'));
               if (thisExam && thisExam.status === 'ongoing') {
@@ -150,11 +151,11 @@ const ExamPage: React.FC = () => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-      const res = await fetch(`http://localhost:3001/api/exams/${id}`, { signal: controller.signal });
+      const res = await fetch(`${API_BASE_URL}/api/exams/${id}`, { signal: controller.signal });
       const data = await res.json();
       setExamInfo(data);
       
-      const settingsRes = await fetch('http://localhost:3001/api/settings', { signal: controller.signal });
+      const settingsRes = await fetch(`${API_BASE_URL}/api/settings`, { signal: controller.signal });
       const settingsData = await settingsRes.json();
       if (settingsData.cbt_test_settings) {
         setTestSettings((prev: any) => ({ ...prev, ...settingsData.cbt_test_settings }));
@@ -162,10 +163,12 @@ const ExamPage: React.FC = () => {
 
       const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
       try {
-        const proctorRes = await fetch('http://localhost:3001/api/proctoring', { signal: controller.signal });
+        const proctorRes = await fetch(`${API_BASE_URL}/api/proctoring`, { signal: controller.signal });
         const proctorData = await proctorRes.json();
-        const me = proctorData.find((p: any) => p.nis === user.username);
-        if (me && me.isExempt) setIsExempt(true);
+        if (Array.isArray(proctorData)) {
+            const me = proctorData.find((p: any) => p.nis === user.username);
+            if (me && me.isExempt) setIsExempt(true);
+        }
       } catch (e) {
         console.warn("Proctoring fetch warning", e);
       }
@@ -194,7 +197,7 @@ const ExamPage: React.FC = () => {
       }
 
       const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
-      const res = await fetch(`http://localhost:3001/api/exams/${id}/start`, {
+      const res = await fetch(`${API_BASE_URL}/api/exams/${id}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -268,7 +271,7 @@ const ExamPage: React.FC = () => {
         if (isPreview) return;
         try {
             const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
-            const res = await fetch(`http://localhost:3001/api/exams/${id}/save-progress`, {
+            const res = await fetch(`${API_BASE_URL}/api/exams/${id}/save-progress`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
@@ -314,7 +317,7 @@ const ExamPage: React.FC = () => {
     const interval = setInterval(async () => {
         try {
             const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
-            const res = await fetch(`http://localhost:3001/api/exams/${id}/save-progress`, {
+            const res = await fetch(`${API_BASE_URL}/api/exams/${id}/save-progress`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
@@ -347,12 +350,12 @@ const ExamPage: React.FC = () => {
             const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
             const userId = user.id;
             if (userId) {
-                await fetch(`http://localhost:3001/api/proctoring/${userId}/action`, {
+                await fetch(`${API_BASE_URL}/api/proctoring/${userId}/action`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'suspend' })
                 });
-                await fetch(`http://localhost:3001/api/proctoring/${userId}/action`, {
+                await fetch(`${API_BASE_URL}/api/proctoring/${userId}/action`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'logout' })
@@ -364,66 +367,69 @@ const ExamPage: React.FC = () => {
     syncLock();
   }, [isCheatLocked, cheatLockTimer, isPreview]);
 
-  // Anti-Cheat Logic
+  // Anti-Cheat Refs
+  const lastFullscreenRequest = React.useRef(0);
+
+  const handleViolation = async () => {
+    if (isPreview || !testSettings || isExempt) return;
+    if (!testSettings.simpleCheatDetection || isCheatLocked) return;
+    
+    if (Date.now() - lastFullscreenRequest.current < 2000) {
+        console.log("[ANTI-CHEAT] Violation ignored during fullscreen grace period.");
+        return;
+    }
+
+    let shouldLockPermanently = false;
+    setCheatViolationCount(prev => {
+        const next = prev + 1;
+        const max = parseInt(testSettings.cheatMaxViolations || '3');
+        if (next >= max) {
+          shouldLockPermanently = true;
+          setIsCheatLocked(true);
+          setCheatLockTimer(-1);
+        } else {
+          setIsCheatLocked(true);
+          setCheatLockTimer(parseInt(testSettings.cheatLockWaitTime || '10'));
+        }
+        return next;
+    });
+
+    if (shouldLockPermanently) {
+        try {
+            const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
+            const userId = user.id;
+            if (userId) {
+                await fetch(`${API_BASE_URL}/api/proctoring/${userId}/action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'suspend', timeLeft })
+                });
+                await fetch(`${API_BASE_URL}/api/proctoring/${userId}/action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'logout', timeLeft })
+                });
+                toast.error("Akun Anda dikunci! Menuju halaman login...");
+                setTimeout(() => {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    window.location.href = '/login?reason=suspended';
+                }, 3000);
+            }
+        } catch (e) { console.error("Locking failed", e); }
+    }
+  };
+
   useEffect(() => {
     if (isPreview || !testSettings || isExempt) return;
-    const handleViolation = async () => {
-        if (!testSettings.simpleCheatDetection || isCheatLocked) return;
-        
-        let shouldLockPermanently = false;
-
-        setCheatViolationCount(prev => {
-            const next = prev + 1;
-            const max = parseInt(testSettings.cheatMaxViolations || '3');
-            if (next >= max) {
-              shouldLockPermanently = true;
-              setIsCheatLocked(true);
-              setCheatLockTimer(-1);
-            } else {
-              setIsCheatLocked(true);
-              setCheatLockTimer(parseInt(testSettings.cheatLockWaitTime || '10'));
-            }
-            return next;
-        });
-
-        if (shouldLockPermanently) {
-            try {
-                const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
-                const userId = user.id;
-                if (userId) {
-                    await fetch(`http://localhost:3001/api/proctoring/${userId}/action`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'suspend', timeLeft })
-                    });
-                    await fetch(`http://localhost:3001/api/proctoring/${userId}/action`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'logout', timeLeft })
-                    });
-                    
-                    toast.error("Akun Anda dikunci! Menuju halaman login...");
-                    
-                    setTimeout(() => {
-                        localStorage.clear();
-                        sessionStorage.clear();
-                        window.location.href = '/login?reason=suspended';
-                    }, 3000);
-                }
-            } catch (e) { console.error("Locking failed", e); }
-        }
-    };
     
     const visibilityHandler = () => { if (document.visibilityState === 'hidden') handleViolation(); };
     window.addEventListener('blur', handleViolation);
     document.addEventListener('visibilitychange', visibilityHandler);
     
-    // FULLSCREEN ENFORCEMENT
     const handleFullscreenChange = () => {
         if (testSettings?.forceFullscreen && !document.fullscreenElement && !isPreview && !isCheatLocked) {
-             // We can't force it without interaction, but we can try 
-             // and also show a warning or modal if needed. 
-             // For now, let's just try to re-request.
+             lastFullscreenRequest.current = Date.now();
              document.documentElement.requestFullscreen().catch(() => {});
         }
     };
@@ -433,24 +439,20 @@ const ExamPage: React.FC = () => {
         window.removeEventListener('blur', handleViolation);
         document.removeEventListener('visibilitychange', visibilityHandler);
         document.removeEventListener('fullscreenchange', handleFullscreenChange);
-
-        // Auto-exit fullscreen when leaving the exam page
         if (document.fullscreenElement && !isPreview) {
             document.exitFullscreen().catch(() => {});
         }
     };
-  }, [isPreview, testSettings, id, navigate, isCheatLocked, isExempt]);
+  }, [isPreview, testSettings, id, navigate, isCheatLocked, isExempt, timeLeft]);
 
-  // Mandatory Fullscreen Initial Trigger on interaction
   useEffect(() => {
     if (isPreview || !testSettings?.forceFullscreen || isCheatLocked || isLoading) return;
-    
     const trigger = () => {
         if (!document.fullscreenElement) {
+            lastFullscreenRequest.current = Date.now();
             document.documentElement.requestFullscreen().catch(() => {});
         }
     };
-    
     window.addEventListener('click', trigger, { once: true });
     return () => window.removeEventListener('click', trigger);
   }, [testSettings, isPreview, isCheatLocked, isLoading]);
@@ -493,7 +495,7 @@ const ExamPage: React.FC = () => {
     }
     try {
         const user = JSON.parse(localStorage.getItem('cbt_user') || '{}');
-        const res = await fetch(`http://localhost:3001/api/exams/${id}/submit`, {
+        const res = await fetch(`${API_BASE_URL}/api/exams/${id}/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -535,8 +537,11 @@ const ExamPage: React.FC = () => {
   );
 
   const currentQ = questionsList[currentIndex];
+  
+  // Safe mapping for options
+  const qOptions = currentQ?.options || [];
   const answeredCount = Object.keys(answers).length;
-  const progressPercent = Math.round((answeredCount / questionsList.length) * 100);
+  const progressPercent = Math.round((answeredCount / (questionsList.length || 1)) * 100);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans overflow-hidden">
@@ -545,12 +550,12 @@ const ExamPage: React.FC = () => {
             <div className="bg-white p-12 rounded-[3rem] text-center max-w-md w-full shadow-2xl relative overflow-hidden border">
                 <div className="absolute top-0 left-0 w-full h-2 bg-rose-500 font-bold uppercase tracking-widest text-[9px] text-white flex items-center justify-center">Security Lock</div>
                 <ShieldAlert className="w-20 h-20 text-rose-500 mx-auto mb-6" />
-                <h2 className="text-2xl font-black uppercase mb-2">{testSettings.cheatWarningTitle}</h2>
-                <p className="text-slate-400 text-sm font-medium mb-8 leading-relaxed italic">{testSettings.cheatWarningMessage}</p>
+                <h2 className="text-2xl font-black uppercase mb-2">{testSettings?.cheatWarningTitle || 'Peringatan!'}</h2>
+                <p className="text-slate-400 text-sm font-medium mb-8 leading-relaxed italic">{testSettings?.cheatWarningMessage || 'Pelanggaran terdeteksi.'}</p>
                 <div className="bg-slate-50 p-6 rounded-3xl mb-4 border border-slate-100">
                     <div className="flex justify-between items-center mb-4">
                         <span className="text-[10px] font-black uppercase text-slate-400">Pelanggaran Terdeteksi</span>
-                        <span className="bg-rose-100 text-rose-600 px-3 py-1 rounded-full text-[10px] font-black">{cheatViolationCount} / {testSettings.cheatMaxViolations}</span>
+                        <span className="bg-rose-100 text-rose-600 px-3 py-1 rounded-full text-[10px] font-black">{cheatViolationCount} / {testSettings?.cheatMaxViolations || '3'}</span>
                     </div>
                     {cheatLockTimer === -1 ? (
                         <div className="space-y-4">
@@ -623,28 +628,28 @@ const ExamPage: React.FC = () => {
                           <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black text-xl shadow-xl ring-4 ring-slate-50">{currentIndex+1}</div>
                           <div>
                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] block mb-1">Butir Soal</span>
-                              <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{currentIndex+1} / {questionsList.length}</span>
+                              <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{currentIndex+1} / {(questionsList.length || 0)}</span>
                           </div>
                       </div>
-                      <div className="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ring-1 ring-indigo-100">{currentQ.type}</div>
+                      <div className="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ring-1 ring-indigo-100">{currentQ?.type || 'N/A'}</div>
                   </div>
 
-                  <div className="text-xl md:text-2xl font-medium mb-12 leading-relaxed text-slate-800 question-content" dangerouslySetInnerHTML={{ __html: currentQ.text }}></div>
+                  <div className="text-xl md:text-2xl font-medium mb-12 leading-relaxed text-slate-800 question-content" dangerouslySetInnerHTML={{ __html: currentQ?.text || '' }}></div>
 
                   <div className="space-y-4 font-outfit">
-                      {currentQ.type === 'ESSAY' ? (
+                      {currentQ?.type === 'ESSAY' ? (
                           <div className="relative group">
                               <div className="absolute top-4 right-6 text-[10px] font-black text-slate-300 uppercase tracking-widest group-focus-within:text-indigo-400 transition-colors">Lembar Jawaban</div>
                               <textarea 
-                                value={answers[currentQ.id] || ''}
-                                onChange={(e) => setAnswers(prev => ({...prev, [currentQ.id]: e.target.value}))}
+                                value={answers[currentQ?.id] || ''}
+                                onChange={(e) => setAnswers(prev => ({...prev, [currentQ!.id]: e.target.value}))}
                                 className="w-full h-80 p-8 pt-12 bg-slate-50 border-2 border-slate-100 rounded-[3rem] outline-none focus:border-indigo-600 font-semibold text-lg transition-all focus:bg-white focus:shadow-inner" 
                                 placeholder="Tuliskan jawaban lengkap Anda di sini..."
                               ></textarea>
                           </div>
-                      ) : (currentQ.type === 'MATCHING' || currentQ.type === 'ORDERING') ? (
+                      ) : (currentQ?.type === 'MATCHING' || currentQ?.type === 'ORDERING') ? (
                           <div className="grid grid-cols-1 gap-2">
-                              {currentQ.options.map((opt, i) => (
+                              {qOptions.map((opt: any, i: number) => (
                                   <div key={i} className="group bg-white border border-slate-200 rounded-2xl p-3 hover:border-indigo-400 hover:shadow-md transition-all flex items-center justify-between gap-4">
                                       <div className="flex items-center gap-3 flex-1">
                                           <div className="w-8 h-8 shrink-0 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center font-black text-xs group-hover:bg-indigo-600 group-hover:text-white transition-colors">{opt.id}</div>
@@ -653,29 +658,24 @@ const ExamPage: React.FC = () => {
                                       <div className="flex items-center gap-3 shrink-0">
                                           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:block">Pilih:</span>
                                           <select 
-                                            value={answers[currentQ.id]?.[opt.id] || ''} 
+                                            value={answers[currentQ?.id]?.[opt.id] || ''} 
                                             onChange={e => handleOrderingMatchingChange(opt.id, e.target.value)}
                                             className="bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-1.5 text-xs font-black text-indigo-600 outline-none cursor-pointer focus:border-indigo-500 focus:bg-white"
                                           >
                                               <option value="">-</option>
                                               {(() => {
-                                                  // Hitung jumlah item di soal (berdasarkan angka numbering 1., 2., dst)
-                                                  const textNumbers = currentQ.text.match(/(?:^|\s|<p>|\n)(\d+)[\.\)]/g);
+                                                  const textNumbers = (currentQ?.text || '').match(/(?:^|\s|<p>|\n)(\d+)[\.\)]/g);
                                                   let maxFromText = 0;
                                                   if (textNumbers) {
                                                     const nums = textNumbers.map(n => parseInt(n.match(/\d+/)![0]));
                                                     maxFromText = Math.max(...nums);
                                                   }
-                                                  
-                                                  const maxRange = Math.max(currentQ.options.length, maxFromText);
+                                                  const maxRange = Math.max(qOptions.length, maxFromText);
                                                   return Array.from({length: maxRange}, (_, idx) => (idx+1).toString());
                                               })().map(n => {
-                                                  // Logika: Hilangkan jika sudah dipakai pernyataan LAIN
-                                                  const currentQAns = answers[currentQ.id] || {};
+                                                  const currentQAns = answers[currentQ?.id] || {};
                                                   const isUsedByOther = Object.entries(currentQAns).some(([oid, val]) => oid !== opt.id && val === n);
-                                                  
                                                   if (isUsedByOther) return null;
-                                                  
                                                   return <option key={n} value={n}>{n}</option>;
                                               })}
                                           </select>
@@ -683,12 +683,12 @@ const ExamPage: React.FC = () => {
                                   </div>
                               ))}
                           </div>
-                      ) : currentQ.type === 'FIB' ? (
+                      ) : currentQ?.type === 'FIB' ? (
                           <div className="relative group max-w-xl mx-auto py-8">
                                <input 
                                  type="text"
-                                 value={answers[currentQ.id] || ''}
-                                 onChange={(e) => setAnswers(prev => ({...prev, [currentQ.id]: e.target.value}))}
+                                 value={answers[currentQ?.id] || ''}
+                                 onChange={(e) => setAnswers(prev => ({...prev, [currentQ!.id]: e.target.value}))}
                                  className="w-full h-20 px-10 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none focus:border-indigo-600 font-black text-2xl text-center text-indigo-700 transition-all focus:bg-white focus:shadow-xl shadow-indigo-100/20" 
                                  placeholder="Ketik jawaban di sini..."
                                />
@@ -696,8 +696,8 @@ const ExamPage: React.FC = () => {
                           </div>
                       ) : (
                           <div className="grid grid-cols-1 gap-3">
-                              {currentQ.options.map(opt => {
-                                  const isSelected = currentQ.type === 'MCMA' ? (answers[currentQ.id] || []).includes(opt.id) : answers[currentQ.id] === opt.id;
+                              {qOptions.map((opt: any) => {
+                                  const isSelected = currentQ?.type === 'MCMA' ? (answers[currentQ?.id] || []).includes(opt.id) : answers[currentQ?.id] === opt.id;
                                   return (
                                       <button 
                                         key={opt.id} 
@@ -724,10 +724,10 @@ const ExamPage: React.FC = () => {
                   </button>
                   
                   <button 
-                    onClick={() => setFlagged(prev => ({...prev, [currentQ.id]: !prev[currentQ.id]}))}
-                    className={`h-14 md:h-16 flex-1 max-w-[200px] border-2 font-black text-xs uppercase tracking-[0.3em] rounded-3xl transition-all flex items-center justify-center gap-2 shadow-2xl active:scale-95 ${flagged[currentQ.id] ? 'bg-amber-100 border-amber-400 text-amber-700 shadow-amber-200' : 'bg-white border-slate-200 text-slate-400'}`}
+                    onClick={() => setFlagged(prev => ({...prev, [currentQ?.id]: !prev[currentQ?.id]}))}
+                    className={`h-14 md:h-16 flex-1 max-w-[200px] border-2 font-black text-xs uppercase tracking-[0.3em] rounded-3xl transition-all flex items-center justify-center gap-2 shadow-2xl active:scale-95 ${currentQ && flagged[currentQ.id] ? 'bg-amber-100 border-amber-400 text-amber-700 shadow-amber-200' : 'bg-white border-slate-200 text-slate-400'}`}
                   >
-                      <Flag className={`w-4 h-4 ${flagged[currentQ.id] ? 'fill-amber-700' : ''}`} /> <span className="hidden sm:inline">Ragu</span>
+                      <Flag className={`w-4 h-4 ${currentQ && flagged[currentQ.id] ? 'fill-amber-700' : ''}`} /> <span className="hidden sm:inline">Ragu</span>
                   </button>
 
                   {currentIndex === questionsList.length - 1 ? (

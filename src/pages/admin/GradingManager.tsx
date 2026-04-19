@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   Edit3, 
@@ -34,7 +35,7 @@ const GradingManager: React.FC = () => {
     const fetchExamsWithEssay = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch('http://localhost:3001/api/grading/exams');
+            const res = await fetch(`${API_BASE_URL}/api/grading/exams`);
             const data = await res.json();
             setExams(data);
         } catch (err) {
@@ -50,7 +51,7 @@ const GradingManager: React.FC = () => {
     setIsLoading(true);
     setSelectedExam(exam);
     try {
-        const res = await fetch(`http://localhost:3001/api/grading/exams/${exam.id}/students`);
+        const res = await fetch(`${API_BASE_URL}/api/grading/exams/${exam.id}/students`);
         const data = await res.json();
         setStudents(data);
         setViewMode('students');
@@ -65,7 +66,7 @@ const GradingManager: React.FC = () => {
     setIsLoading(true);
     setSelectedStudent(student);
     try {
-        const res = await fetch(`http://localhost:3001/api/grading/exams/${selectedExam.id}/students/${student.id}/details`);
+        const res = await fetch(`${API_BASE_URL}/api/grading/exams/${selectedExam.id}/students/${student.id}/details`);
         const data = await res.json();
         setEssayQuestions(data.essayQuestions);
         
@@ -87,7 +88,7 @@ const GradingManager: React.FC = () => {
   const handleSaveGrading = async () => {
     setIsSaving(true);
     try {
-        const res = await fetch('http://localhost:3001/api/grading/save', {
+        const res = await fetch(`${API_BASE_URL}/api/grading/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

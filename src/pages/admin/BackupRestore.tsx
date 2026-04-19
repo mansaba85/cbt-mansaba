@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useRef } from 'react';
 import {
   HardDrive,
@@ -52,7 +53,7 @@ const BackupRestore: React.FC = () => {
   const fetchBackups = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:3001/api/backups');
+      const res = await fetch(`${API_BASE_URL}/api/backups`);
       const data = await res.json();
       setBackups(data);
     } catch (err) {
@@ -74,7 +75,7 @@ const BackupRestore: React.FC = () => {
   const handleBackup = async () => {
     setIsBackingUp(true);
     try {
-        const res = await fetch('http://localhost:3001/api/backups', { 
+        const res = await fetch(`${API_BASE_URL}/api/backups`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: backupType })
@@ -107,7 +108,7 @@ const BackupRestore: React.FC = () => {
     formData.append('backupFile', restoreFile);
 
     try {
-        const res = await fetch('http://localhost:3001/api/backups/restore', {
+        const res = await fetch(`${API_BASE_URL}/api/backups/restore`, {
             method: 'POST',
             body: formData
         });
@@ -127,12 +128,12 @@ const BackupRestore: React.FC = () => {
   };
 
   const handleDownload = (filename: string) => {
-    window.open(`http://localhost:3001/api/backups/download/${filename}`, '_blank');
+    window.open(`${API_BASE_URL}/api/backups/download/${filename}`, '_blank');
   };
 
   const handleDelete = async (filename: string) => {
     try {
-        const res = await fetch(`http://localhost:3001/api/backups/${filename}`, { method: 'DELETE' });
+        const res = await fetch(`${API_BASE_URL}/api/backups/${filename}`, { method: 'DELETE' });
         const result = await res.json();
         if (result.success) {
             showNotif('File backup berhasil dihapus.', 'warning');

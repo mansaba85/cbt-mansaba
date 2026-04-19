@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config/api';
 import { 
   Plus, 
   Settings2, 
@@ -31,6 +32,7 @@ import { toast } from 'sonner';
 const ExamsManager: React.FC = () => {
   const confirm = useConfirm();
   const [view, setView] = useState<'list' | 'add' | 'edit'>('list');
+  const [selectedExamIds, setSelectedExamIds] = useState<number[]>([]);
   const [exams, setExams] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [groupMappings, setGroupMappings] = useState<Record<number, number[]>>({});
@@ -57,16 +59,51 @@ const ExamsManager: React.FC = () => {
   const fetchExams = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:3001/api/exams');
+      const res = await fetch(`${API_BASE_URL}/api/exams`);
       const data = await res.json();
       setExams(data);
     } catch (err) { console.error(err); }
     finally { setIsLoading(false); }
   };
 
+  const handleToggleExamSelection = (id: number) => {
+    setSelectedExamIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkDeleteExams = async () => {
+    if (selectedExamIds.length === 0) return;
+
+    const ok = await confirm({
+      title: 'Hapus Massal Jadwal',
+      message: `Apakah Anda yakin ingin menghapus ${selectedExamIds.length} jadwal terpilih? Data hasil ujian yang terikat mungkin akan ikut terhapus.`,
+      type: 'danger'
+    });
+
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/exams/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedExamIds })
+      });
+      if (res.ok) {
+         toast.success(`${selectedExamIds.length} jadwal berhasil dihapus`);
+         setSelectedExamIds([]);
+         fetchExams();
+      } else {
+         toast.error("Gagal menghapus beberapa jadwal");
+      }
+    } catch (e) {
+      toast.error("Masalah koneksi server");
+    }
+  };
+
   const fetchSubjects = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/subjects');
+      const res = await fetch(`${API_BASE_URL}/api/subjects`);
       const data = await res.json();
       setSubjects(data);
     } catch (err) { console.error(err); }
@@ -74,10 +111,10 @@ const ExamsManager: React.FC = () => {
 
   const fetchGroups = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/groups');
+      const res = await fetch(`${API_BASE_URL}/api/groups`);
       const data = await res.json();
       setGroups(data);
-      const mRes = await fetch('http://localhost:3001/api/groups/mappings');
+      const mRes = await fetch(`${API_BASE_URL}/api/groups/mappings`);
       const mData = await mRes.json();
       setGroupMappings(mData);
     } catch (err) { console.error(err); }
@@ -204,7 +241,7 @@ const ExamsManager: React.FC = () => {
     console.log("Submitting Clean Data:", submissionData);
 
     try {
-      const response = await fetch(selectedExamId ? `http://localhost:3001/api/exams/${selectedExamId}` : 'http://localhost:3001/api/exams', {
+      const response = await fetch(selectedExamId ? `${API_BASE_URL}/api/exams/${selectedExamId}` : `${API_BASE_URL}/api/exams`, {
         method: selectedExamId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(submissionData)
@@ -230,7 +267,7 @@ const ExamsManager: React.FC = () => {
 
   const handleDeleteExam = async (id: number) => {
      try {
-        const res = await fetch(`http://localhost:3001/api/exams/${id}`, { method: 'DELETE' });
+        const res = await fetch(`${API_BASE_URL}/api/exams/${id}`, { method: 'DELETE' });
         if (res.ok) { toast.success("Data dihapus"); fetchExams(); }
      } catch (e) { toast.error("Gagal hapus"); }
   };
@@ -479,6 +516,14 @@ const ExamsManager: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+           {selectedExamIds.length > 0 && (
+              <button 
+                onClick={handleBulkDeleteExams}
+                className="flex items-center gap-2 bg-rose-50 text-rose-600 px-5 py-3 rounded-xl font-bold border border-rose-100 hover:bg-rose-600 hover:text-white transition-all text-[10px] uppercase tracking-widest active:scale-95 shadow-lg shadow-rose-100"
+              >
+                <Trash2 className="w-4 h-4" /> HAPUS TERPILIH ({selectedExamIds.length})
+              </button>
+           )}
            <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
               <input type="text" placeholder="CARI NAMA TES..." value={examSearchTerm} onChange={(e) => setExamSearchTerm(e.target.value)} className="h-12 pl-11 pr-6 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/5 w-64 transition-all" />
@@ -493,6 +538,18 @@ const ExamsManager: React.FC = () => {
         <table className="w-full text-left">
           <thead>
             <tr className="bg-slate-50/50 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-[.2em]">
+               <th className="px-8 py-5 w-10">
+                  <div 
+                    onClick={() => {
+                        const currentVisible = exams.filter(e => e.name.toLowerCase().includes(examSearchTerm.toLowerCase())).map(e => e.id);
+                        if (selectedExamIds.length === currentVisible.length) setSelectedExamIds([]);
+                        else setSelectedExamIds(currentVisible);
+                    }}
+                    className={`w-5 h-5 rounded-md border-2 flex items-center justify-center cursor-pointer transition-all ${selectedExamIds.length > 0 ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300'}`}
+                  >
+                     {selectedExamIds.length > 0 && <CheckSquare className="w-3.5 h-3.5" />}
+                  </div>
+               </th>
                <th className="px-8 py-5">Informasi Ujian</th>
                <th className="px-8 py-5">Waktu Pelaksanaan</th>
                <th className="px-8 py-5 text-center">Token</th>
@@ -506,7 +563,15 @@ const ExamsManager: React.FC = () => {
                const end = new Date(exam.endTime);
                
                return (
-                <tr key={exam.id} className={`group hover:bg-slate-50/50 transition-all ${isFinished ? 'opacity-40' : ''}`}>
+                <tr key={exam.id} className={`group transition-all ${isFinished ? 'bg-slate-50/50 grayscale opacity-60' : 'hover:bg-slate-50/50'} ${selectedExamIds.includes(exam.id) ? 'bg-blue-50/30' : ''}`}>
+                  <td className="px-8 py-4">
+                      <div 
+                        onClick={() => handleToggleExamSelection(exam.id)}
+                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center cursor-pointer transition-all ${selectedExamIds.includes(exam.id) ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 group-hover:border-blue-300'}`}
+                      >
+                         {selectedExamIds.includes(exam.id) && <CheckSquare className="w-3.5 h-3.5" />}
+                      </div>
+                  </td>
                   <td className="px-8 py-4">
                      <div className="flex items-center gap-4">
                         <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center border-2 ${isFinished ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-blue-50 border-blue-100 text-blue-600 shadow-sm'}`}>
@@ -515,12 +580,7 @@ const ExamsManager: React.FC = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                            <h3 className="font-bold text-slate-800 text-sm truncate leading-tight group-hover:text-blue-700 transition-colors uppercase tracking-tight">{exam.name}</h3>
-                           <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
-                                 <div className="w-1 h-3 bg-blue-500 rounded-full"></div>
-                                 {exam.topicRules?.[0]?.subject?.name || 'Materi Campuran'}
-                              </span>
-                           </div>
+                           <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Sesi Ujian Aktif</p>
                         </div>
                      </div>
                   </td>
@@ -530,13 +590,14 @@ const ExamsManager: React.FC = () => {
                            <Clock className="w-3 h-3 text-blue-500" />
                            <span>{start.toLocaleDateString('id-ID', {day:'2-digit', month:'short'})} • {start.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</span>
                         </div>
-                        <div className="text-[8px] font-bold text-slate-400 pl-5 uppercase">
-                           S/D {end.toLocaleDateString('id-ID', {day:'2-digit', month:'short'})} • {end.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}
+                        <div className="text-[9px] font-bold text-slate-600 pl-5 uppercase flex items-center gap-1.5">
+                           <span className="text-[8px] px-1 bg-slate-100 rounded text-slate-500">S/D</span>
+                           {end.toLocaleDateString('id-ID', {day:'2-digit', month:'short'})} • {end.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}
                         </div>
                      </div>
                   </td>
                   <td className="px-8 py-4 text-center">
-                     <span className="inline-block px-4 py-1.5 bg-slate-900 text-blue-400 rounded-lg font-mono text-xs font-black tracking-widest border border-slate-800">{exam.token || 'OPEN'}</span>
+                     <span className="inline-block px-4 py-1.5 bg-slate-900 text-white rounded-lg font-mono text-[10px] font-black tracking-widest border border-slate-800 shadow-inner">{exam.token || 'OPEN'}</span>
                   </td>
                   <td className="px-8 py-4 text-right">
                      <div className="flex justify-end gap-2">

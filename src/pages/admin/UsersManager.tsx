@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   Search, 
@@ -85,13 +86,13 @@ const UsersManager: React.FC = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const gRes = await fetch('http://localhost:3001/api/groups');
+      const gRes = await fetch(`${API_BASE_URL}/api/groups`);
       const groupsData = await gRes.json();
       setGroups(groupsData);
 
       const uUrl = selectedGroupId 
-        ? `http://localhost:3001/api/users?groupId=${selectedGroupId}` 
-        : 'http://localhost:3001/api/users';
+        ? `${API_BASE_URL}/api/users?groupId=${selectedGroupId}` 
+        : `${API_BASE_URL}/api/users`;
       const uRes = await fetch(uUrl);
       const usersData = await uRes.json();
       setUsers(usersData);
@@ -172,8 +173,8 @@ const UsersManager: React.FC = () => {
       if (form.password.trim()) payload.password = form.password.trim();
 
       const url = modalMode === 'add'
-        ? 'http://localhost:3001/api/users'
-        : `http://localhost:3001/api/users/${editingUser?.id}`;
+        ? `${API_BASE_URL}/api/users`
+        : `${API_BASE_URL}/api/users/${editingUser?.id}`;
       const method = modalMode === 'add' ? 'POST' : 'PUT';
 
       const res = await fetch(url, {
@@ -199,7 +200,7 @@ const UsersManager: React.FC = () => {
 
   const handleDelete = async (user: User) => {
     try {
-      const res = await fetch(`http://localhost:3001/api/users/${user.id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/api/users/${user.id}`, { method: 'DELETE' });
       if (res.ok) {
         showNotif(`✅ User ${user.username} berhasil dihapus.`);
         setDeleteConfirm(null);
@@ -218,7 +219,7 @@ const UsersManager: React.FC = () => {
     try {
       let count = 0;
       for (const id of selectedIds) {
-        const res = await fetch(`http://localhost:3001/api/users/${id}`, { method: 'DELETE' });
+        const res = await fetch(`${API_BASE_URL}/api/users/${id}`, { method: 'DELETE' });
         if (res.ok) count++;
       }
       showNotif(`✅ Berhasil menghapus ${count} user.`);

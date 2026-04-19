@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   Printer, 
@@ -27,9 +28,9 @@ const AttendanceFormPage: React.FC = () => {
             setIsLoading(true);
             try {
                 const [eRes, gRes, sRes] = await Promise.all([
-                    fetch('http://localhost:3001/api/exams'),
-                    fetch('http://localhost:3001/api/groups'),
-                    fetch('http://localhost:3001/api/settings')
+                    fetch(`${API_BASE_URL}/api/exams`),
+                    fetch(`${API_BASE_URL}/api/groups`),
+                    fetch(`${API_BASE_URL}/api/settings`)
                 ]);
                 setExams(await eRes.json());
                 setGroups(await gRes.json());
@@ -50,7 +51,7 @@ const AttendanceFormPage: React.FC = () => {
         if (!selectedExam || !selectedGroup) return;
         setIsFetching(true);
         try {
-            const res = await fetch(`http://localhost:3001/api/users?groupId=${selectedGroup}`);
+            const res = await fetch(`${API_BASE_URL}/api/users?groupId=${selectedGroup}`);
             setStudents(await res.json());
         } catch (err) {
             console.error(err);

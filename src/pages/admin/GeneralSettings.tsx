@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import {
@@ -128,7 +129,7 @@ const GeneralSettings: React.FC = () => {
   React.useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/settings');
+        const res = await fetch(`${API_BASE_URL}/api/settings`);
         const data = await res.json();
         
         if (data.cbt_site_settings) setSite(data.cbt_site_settings);
@@ -168,7 +169,7 @@ const GeneralSettings: React.FC = () => {
     };
 
     try {
-        const res = await fetch('http://localhost:3001/api/settings', {
+        const res = await fetch(`${API_BASE_URL}/api/settings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(allSettings)

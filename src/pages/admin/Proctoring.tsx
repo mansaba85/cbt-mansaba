@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState } from 'react';
 import { 
   Users, 
@@ -201,7 +202,7 @@ export default function Proctoring() {
 
   const fetchLiveProctoring = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/proctoring');
+      const res = await fetch(`${API_BASE_URL}/api/proctoring`);
       if (res.ok) {
         const data = await res.json();
         setStudents(Array.isArray(data) ? data : []);
@@ -224,7 +225,9 @@ export default function Proctoring() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [openDropdown]);
 
-  const availableGroups = Array.from(new Set(students.map(s => s?.group).filter(Boolean))).sort();
+  const availableGroups = Array.from(new Set(
+    students.flatMap(s => (s.group || '').split(',').map(g => g.trim()))
+  )).filter(Boolean).sort();
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
 
   const activeCount = students.filter(s => s.status === 'online' || s.status === 'warning').length;
@@ -235,7 +238,7 @@ export default function Proctoring() {
   const handleAction = async (studentId: string, action: string, resultId?: number) => {
     setOpenDropdown(null);
     try {
-      await fetch(`http://localhost:3001/api/proctoring/${studentId}/action`, {
+      await fetch(`${API_BASE_URL}/api/proctoring/${studentId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, resultId })
@@ -248,7 +251,7 @@ export default function Proctoring() {
 
   const filteredStudents = students.filter(s => {
     if (!s) return false;
-    if (selectedGroup !== 'all' && s.group !== selectedGroup) return false;
+    if (selectedGroup !== 'all' && !(s.group || '').split(',').map(g => g.trim()).includes(selectedGroup)) return false;
     const sName = (s.name || '').toLowerCase();
     const sNis = (s.nis || '');
     const sStatus = (s.status || '');

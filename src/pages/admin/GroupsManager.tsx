@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   Users, 
@@ -24,10 +25,12 @@ const GroupsManager: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('CLASS');
 
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
   const fetchGroups = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:3001/api/groups');
+      const res = await fetch(`${API_BASE_URL}/api/groups`);
       const data = await res.json();
       setGroups(data);
     } catch (err) {
@@ -41,11 +44,47 @@ const GroupsManager: React.FC = () => {
     fetchGroups();
   }, []);
 
+  const handleToggleSelection = (id: number) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    
+    const isConfirmed = await confirm({
+      title: 'Hapus Massal',
+      message: `Apakah Anda yakin ingin menghapus ${selectedIds.length} grup terpilih? Semua pengguna yang terhubung dengan grup ini akan kehilangan keterhubunganya.`,
+      type: 'danger'
+    });
+
+    if (!isConfirmed) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/groups/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds })
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success(`${selectedIds.length} grup berhasil dihapus`);
+        setSelectedIds([]);
+        fetchGroups();
+      } else {
+        toast.error(result.error || "Gagal menghapus grup dipilih");
+      }
+    } catch (err) {
+      toast.error("Masalah koneksi ke server saat penghapusan massal");
+    }
+  };
+
   const handleAddGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
     try {
-      const res = await fetch('http://localhost:3001/api/groups', {
+      const res = await fetch(`${API_BASE_URL}/api/groups`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newGroupName, category: newGroupCategory })
@@ -73,7 +112,7 @@ const GroupsManager: React.FC = () => {
     if (!isConfirmed) return;
 
     try {
-      const res = await fetch(`http://localhost:3001/api/groups/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/groups/${id}`, {
         method: 'DELETE'
       });
       const result = await res.json();
@@ -113,12 +152,23 @@ const GroupsManager: React.FC = () => {
               </p>
            </div>
         </div>
-        <button 
-          onClick={() => setIsAdding(true)}
-          className="flex items-center gap-3 bg-blue-600 text-white px-5 py-3 rounded-xl font-black shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all text-[10px] uppercase tracking-widest active:scale-95"
-        >
-          <Plus className="w-4 h-4 border border-white/20 rounded-full" /> TAMBAH GRUP
-        </button>
+        
+        <div className="flex items-center gap-2">
+            {selectedIds.length > 0 && (
+                <button 
+                  onClick={handleBulkDelete}
+                  className="flex items-center gap-2 bg-rose-50 text-rose-600 px-5 py-3 rounded-xl font-bold border border-rose-100 hover:bg-rose-600 hover:text-white transition-all text-[10px] uppercase tracking-widest active:scale-95 shadow-lg shadow-rose-100"
+                >
+                  <Trash2 className="w-4 h-4" /> HAPUS TERPILIH ({selectedIds.length})
+                </button>
+            )}
+            <button 
+              onClick={() => setIsAdding(true)}
+              className="flex items-center gap-3 bg-blue-600 text-white px-5 py-3 rounded-xl font-black shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all text-[10px] uppercase tracking-widest active:scale-95"
+            >
+              <Plus className="w-4 h-4 border border-white/20 rounded-full" /> TAMBAH GRUP
+            </button>
+        </div>
       </div>
 
       {/* Stats & Search */}
@@ -146,22 +196,37 @@ const GroupsManager: React.FC = () => {
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-1">
-          <button 
-            onClick={() => setSelectedCategory('ALL')}
-            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 ${selectedCategory === 'ALL' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-          >
-            Semua
-          </button>
-          {categories.map(cat => (
-            <button 
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 ${selectedCategory === cat.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-            >
-              {cat.label}
-            </button>
-          ))}
+      <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-1 gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+              <button 
+                onClick={() => setSelectedCategory('ALL')}
+                className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 ${selectedCategory === 'ALL' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+              >
+                Semua
+              </button>
+              {categories.map(cat => (
+                <button 
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 ${selectedCategory === cat.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+          </div>
+
+          <div className="flex items-center gap-3 pr-2">
+              <button 
+                onClick={() => {
+                    const currentFlat = filteredGroups.filter(g => selectedCategory === 'ALL' || g.category === selectedCategory).map(g => g.id);
+                    if (selectedIds.length === currentFlat.length) setSelectedIds([]);
+                    else setSelectedIds(currentFlat);
+                }}
+                className="text-[10px] font-bold text-blue-600 hover:underline px-2 py-1"
+              >
+                  {selectedIds.length > 0 ? 'Batalkan Pilihan' : 'Pilih Semua'}
+              </button>
+          </div>
       </div>
       {isAdding && (
         <form onSubmit={handleAddGroup} className="bg-slate-900 p-6 rounded-[2rem] shadow-2xl flex flex-col md:flex-row items-center gap-4 animate-in slide-in-from-top-4 duration-300">
@@ -212,16 +277,42 @@ const GroupsManager: React.FC = () => {
                   )}
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                      {catGroups.map((group) => (
-                      <div key={group.id} className="group bg-white rounded-2xl border border-slate-200 p-3 shadow-sm hover:shadow-lg hover:border-blue-200 transition-all flex flex-col justify-between relative overflow-hidden">
+                      {catGroups.map((group) => {
+                       const isSelected = selectedIds.includes(group.id);
+                       return (
+                       <div 
+                         key={group.id} 
+                         onClick={(e) => {
+                             // If clicking anywhere on the card, toggle selection if not clicking on action buttons
+                             if ((e.target as HTMLElement).tagName !== 'BUTTON' && (e.target as HTMLElement).closest('button') === null) {
+                                handleToggleSelection(group.id);
+                             }
+                         }}
+                         className={`group bg-white rounded-2xl border ${isSelected ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-200'} p-3 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between relative overflow-hidden cursor-pointer`}
+                       >
+                          {/* Selection Indicator */}
+                          <div className={`absolute top-3 right-3 w-4 h-4 rounded-full border ${isSelected ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'} flex items-center justify-center transition-all z-10`}>
+                              {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+                          </div>
+
                           <div className="space-y-3">
                             <div className="flex justify-between items-start">
                                 <div className={`w-7 h-7 bg-slate-50 text-slate-300 rounded-lg flex items-center justify-center group-hover:${cat.color} group-hover:text-white transition-all shadow-sm`}>
                                     <Users className="w-3.5 h-3.5" />
                                 </div>
-                                <div className="flex items-center gap-1 transition-all">
-                                    <button onClick={() => { setNewGroupName(group.name); setNewGroupCategory(group.category); setIsAdding(true); }} className="p-1.5 text-slate-300 hover:text-blue-600 transition-colors"><Edit3 className="w-3.5 h-3.5" /></button>
-                                    <button onClick={() => handleDeleteGroup(group.id)} className="p-1.5 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                <div className="flex items-center gap-1 transition-all mr-6">
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); setNewGroupName(group.name); setNewGroupCategory(group.category); setIsAdding(true); }} 
+                                      className="p-1.5 text-slate-300 hover:text-blue-600 transition-colors"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id); }} 
+                                      className="p-1.5 text-slate-300 hover:text-red-600 transition-colors"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
                             </div>
                             <div>
@@ -234,13 +325,13 @@ const GroupsManager: React.FC = () => {
                           </div>
                           
                           <button 
-                            onClick={() => navigate(`/admin/users?groupId=${group.id}`)}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/admin/users?groupId=${group.id}`); }}
                             className="mt-3 w-full py-1.5 bg-slate-50 text-slate-500 border border-slate-100 rounded-lg text-[10px] font-bold uppercase tracking-wider group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-all transform group-hover:scale-[1.02]"
                           >
                             Lihat Siswa
                           </button>
                       </div>
-                      ))}
+                      )})}
                   </div>
               </div>
             );

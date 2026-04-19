@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config/api';
 import React, { useState } from 'react';
 import { Database, User, CheckCircle, Loader2, Server, Key, UserPlus } from 'lucide-react';
 
@@ -26,7 +27,7 @@ export default function InstallWizard() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3001/api/install/setup-db', {
+      const response = await fetch(`${API_BASE_URL}/api/install/setup-db`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dbConfig),
@@ -51,7 +52,7 @@ export default function InstallWizard() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3001/api/install/setup-admin', {
+      const response = await fetch(`${API_BASE_URL}/api/install/setup-admin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(adminConfig),

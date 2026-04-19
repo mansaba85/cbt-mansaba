@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../../config/api';
 import { useNavigate } from 'react-router-dom';
 import { Fingerprint, MonitorSmartphone, GraduationCap, Eye, EyeOff, Loader2, Info } from 'lucide-react';
 
@@ -31,7 +32,7 @@ const LoginPage: React.FC = () => {
 
     const fetchBranding = async () => {
         try {
-            const res = await fetch('http://localhost:3001/api/settings');
+            const res = await fetch(`${API_BASE_URL}/api/settings`);
             const data = await res.json();
             if (data.cbt_site_settings && data.cbt_site_settings.siteName) {
                 setSiteName(data.cbt_site_settings.siteName);
@@ -67,7 +68,7 @@ const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const resp = await fetch('http://localhost:3001/api/auth/login', {
+      const resp = await fetch(`${API_BASE_URL}/api/auth/login`, {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({ username, password })

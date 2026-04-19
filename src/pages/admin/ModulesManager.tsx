@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
@@ -21,7 +22,7 @@ const ModulesManager = () => {
   const fetchModules = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:3001/api/modules');
+      const res = await fetch(`${API_BASE_URL}/api/modules`);
       const data = await res.json();
       setModules(data);
     } catch (err) {
@@ -45,7 +46,7 @@ const ModulesManager = () => {
     if (!isConfirmed) return;
     
     try {
-      const res = await fetch(`http://localhost:3001/api/modules/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/api/modules/${id}`, { method: 'DELETE' });
       const result = await res.json();
       if (result.success) {
         toast.success("Modul berhasil dihapus");

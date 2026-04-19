@@ -448,7 +448,7 @@ app.get('/api/proctoring', async (req, res) => {
         questionNo,
         warnings,
         timeLeft,
-        group: user.groups?.[0] ? user.groups[0].name : 'Tanpa Kelas',
+        group: user.groups?.map((g: any) => g.name).join(', ') || 'Tanpa Kelas',
         testName: recentResult?.exam?.name || '-',
         lockedAt: recentResult?.startedAt ? new Date(recentResult.startedAt).toLocaleString() : '-',
         isExempt: exemptList.includes(user.id),
@@ -1682,6 +1682,21 @@ app.delete('/api/groups/:id', async (req, res) => {
   }
 });
 
+// BULK DELETE Groups
+app.post('/api/groups/bulk-delete', async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'Invalid IDs' });
+  
+  try {
+    await prisma.group.deleteMany({
+      where: { id: { in: ids } }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal menghapus beberapa grup. Pastikan grup tidak memiliki ketergantungan.' });
+  }
+});
+
 // GET All Users with group info
 app.get('/api/users', async (req, res) => {
   const { groupId } = req.query;
@@ -1750,7 +1765,7 @@ app.get('/api/results', async (req, res) => {
         testName: r.exam?.name || 'Unknown',
         username: r.user?.username || 'Unknown',
         fullName: r.user?.fullName || 'Unknown',
-        groups: r.user?.groups ? r.user.groups.map((g: any) => g.name) : ['Default'],
+        groups: r.user?.groups ? r.user.groups.map((g: any) => g.name) : [],
         points: r.score, 
         score: Math.round(r.score), 
         status: r.status // Return raw status: ONGOING, COMPLETED, SUSPENDED
@@ -2058,7 +2073,7 @@ app.get('/api/exams/:id/attendance', async (req, res) => {
         id: s.id,
         username: s.username,
         name: s.fullName,
-        group: s.groups.map((g: any) => g.name).join(', ')
+        group: s.groups.map((g: any) => g.name)
       }))
     });
 
@@ -2131,7 +2146,7 @@ app.get('/api/attendance/recap', async (req, res) => {
             id: s.id,
             name: s.fullName,
             username: s.username,
-            group: s.groups.map((g: any) => g.name).join(', '),
+            group: s.groups.map((g: any) => g.name),
             attendance,
             missedCount
         };
@@ -2371,6 +2386,23 @@ app.delete('/api/exams/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Gagal menghapus tes' });
+  }
+});
+
+// BULK DELETE Exams
+app.post('/api/exams/bulk-delete', async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'Invalid IDs' });
+  
+  try {
+    // Delete all topic mappings first (Prisma should handle Cascade depending on schema, but safe approach here if needed)
+    // Actually prisma.exam.deleteMany will handle Cascade if set in schema.prisma.
+    await prisma.exam.deleteMany({
+      where: { id: { in: ids } }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Gagal menghapus beberapa tes. Pastikan tidak ada hasil ujian yang tersisa.' });
   }
 });
 

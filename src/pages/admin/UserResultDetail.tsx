@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import { 
   ArrowLeft, 
   CheckCircle2, 
@@ -26,7 +27,7 @@ const UserResultDetail: React.FC = () => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`http://localhost:3001/api/results/${id}/review`);
+        const res = await fetch(`${API_BASE_URL}/api/results/${id}/review`);
         const data = await res.json();
         if (data.info) {
           setStudentInfo(data.info);

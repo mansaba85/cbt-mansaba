@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState } from 'react';
 import {
   Lock,
@@ -42,7 +43,7 @@ const ForceLogoutManager: React.FC = () => {
 
   const fetchProctoringData = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/proctoring');
+      const res = await fetch(`${API_BASE_URL}/api/proctoring`);
       if (res.ok) {
         const data = await res.json();
         setStudents(Array.isArray(data) ? data : []);
@@ -66,7 +67,7 @@ const ForceLogoutManager: React.FC = () => {
   const handleLock = async (student: any) => {
     setIsLoading(true);
     try {
-        await fetch(`http://localhost:3001/api/proctoring/${student.id}/action`, {
+        await fetch(`${API_BASE_URL}/api/proctoring/${student.id}/action`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'suspend' })
@@ -82,7 +83,7 @@ const ForceLogoutManager: React.FC = () => {
     setIsLoading(true);
     try {
         for (const id of selectedIds) {
-            await fetch(`http://localhost:3001/api/proctoring/${id}/action`, {
+            await fetch(`${API_BASE_URL}/api/proctoring/${id}/action`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'suspend' })

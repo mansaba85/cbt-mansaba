@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState } from 'react';
 import {
   RefreshCw,
@@ -50,7 +51,7 @@ const ResetParticipantManager: React.FC = () => {
 
   const fetchLockedStudents = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/proctoring');
+      const res = await fetch(`${API_BASE_URL}/api/proctoring`);
       const data = await res.json();
       // Hanya ambil yang statusnya 'locked'
       setStudents(data.filter((s: any) => s.status === 'locked'));
@@ -73,7 +74,7 @@ const ResetParticipantManager: React.FC = () => {
   const handleReset = async (student: any) => {
     setIsLoading(true);
     try {
-        await fetch(`http://localhost:3001/api/proctoring/${student.id}/action`, {
+        await fetch(`${API_BASE_URL}/api/proctoring/${student.id}/action`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'unlock' })
@@ -89,7 +90,7 @@ const ResetParticipantManager: React.FC = () => {
     setIsLoading(true);
     try {
         for (const id of selectedIds) {
-            await fetch(`http://localhost:3001/api/proctoring/${id}/action`, {
+            await fetch(`${API_BASE_URL}/api/proctoring/${id}/action`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'unlock' })

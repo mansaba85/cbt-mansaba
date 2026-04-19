@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, 
@@ -42,11 +43,11 @@ const ItemAnalysis: React.FC = () => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/exams')
+    fetch(`${API_BASE_URL}/api/exams`)
       .then(res => res.json())
       .then(setExams);
     
-    fetch('http://localhost:3001/api/settings')
+    fetch(`${API_BASE_URL}/api/settings`)
       .then(res => res.json())
       .then(settings => {
         if (settings.cbt_institution_settings) setInstitution(settings.cbt_institution_settings);
@@ -58,7 +59,7 @@ const ItemAnalysis: React.FC = () => {
     if (!selectedExamId) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/analysis/exams/${selectedExamId}`);
+      const res = await fetch(`${API_BASE_URL}/api/analysis/exams/${selectedExamId}`);
       const json = await res.json();
       setData(json);
     } catch (err) {

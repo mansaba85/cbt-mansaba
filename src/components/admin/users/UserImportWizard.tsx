@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../../config/api';
 import React, { useState, useRef } from 'react';
 import { 
   FileUp, 
@@ -88,7 +89,7 @@ const UserImportWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }) 
     if (data.length === 0) return;
     setIsSaving(true);
     try {
-      const response = await fetch('http://localhost:3001/api/users/bulk-import', {
+      const response = await fetch(`${API_BASE_URL}/api/users/bulk-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ users: data })

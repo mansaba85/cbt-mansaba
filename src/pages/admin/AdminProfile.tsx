@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   User, 
@@ -54,7 +55,7 @@ const AdminProfile: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/users/${user.id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/users/${user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fullName, username })
@@ -94,7 +95,7 @@ const AdminProfile: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/users/${user.id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/users/${user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: newPassword })

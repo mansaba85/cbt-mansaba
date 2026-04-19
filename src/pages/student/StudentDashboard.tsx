@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config/api';
 import { useNavigate } from 'react-router-dom';
 import { 
   BookOpen, 
@@ -43,8 +44,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ isAdminView = false
         }
 
         const url = isAdminView 
-          ? 'http://localhost:3001/api/exams/active?all=true'
-          : `http://localhost:3001/api/exams/active?userId=${userId}`;
+          ? `${API_BASE_URL}/api/exams/active?all=true`
+          : `${API_BASE_URL}/api/exams/active?userId=${userId}`;
 
         const res = await fetch(url);
         const data = await res.json();
@@ -185,8 +186,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ isAdminView = false
               </div>
 
               <div className="mb-8">
-                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">{item.subject}</p>
                 <h3 className="text-xl font-black text-slate-800 leading-tight group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
+                <div className="w-10 h-1 bg-indigo-100 mt-3 rounded-full group-hover:w-20 group-hover:bg-indigo-600 transition-all duration-500" />
               </div>
 
               <div className="flex items-center gap-4 py-4 border-t border-slate-100">

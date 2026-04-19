@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React from 'react';
 import { 
   Users, 
@@ -35,7 +36,7 @@ const DashboardHome: React.FC = () => {
       if (site.siteName) setSiteName(site.siteName);
     }
 
-    fetch('http://localhost:3001/api/stats')
+    fetch(`${API_BASE_URL}/api/stats`)
       .then(res => res.json())
       .then(data => {
          setDashboardStats([

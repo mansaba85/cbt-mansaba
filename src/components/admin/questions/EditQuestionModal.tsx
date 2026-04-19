@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../../config/api';
 import React, { useState, useEffect } from 'react';
 import { X, Save, CheckCircle2, Loader2, Edit3, Plus, Trash2 } from 'lucide-react';
 import { CKEditor } from 'ckeditor4-react';
@@ -97,7 +98,7 @@ const EditQuestionModal: React.FC<EditQuestionModalProps> = ({ question, isOpen,
     setIsSaving(true);
     try {
       const isNew = question.id === 0;
-      const url = isNew ? 'http://localhost:3001/api/questions' : `http://localhost:3001/api/questions/${question.id}`;
+      const url = isNew ? `${API_BASE_URL}/api/questions` : `${API_BASE_URL}/api/questions/${question.id}`;
       const method = isNew ? 'POST' : 'PUT';
       const body: any = { content: editedContent, type: editedType, difficulty: editedDifficulty, answers: editedAnswers };
       if (isNew) body.subjectId = subjectId;

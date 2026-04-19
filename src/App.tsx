@@ -35,12 +35,14 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import { Toaster } from 'sonner';
 import { ConfirmProvider } from './components/ui/ConfirmContext';
 
+import { API_BASE_URL } from './config/api';
+
 function App() {
   const [isInstalled, setIsInstalled] = useState<boolean | null>(null);
 
   useEffect(() => {
     const checkStatus = () => {
-      fetch('http://localhost:3001/api/install/status')
+      fetch(`${API_BASE_URL}/api/install/status`)
         .then(res => res.json())
         .then(data => setIsInstalled(data.installed))
         .catch(err => {

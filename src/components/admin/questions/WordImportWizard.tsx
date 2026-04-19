@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../../config/api';
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, CheckCircle2, AlertCircle, Loader2, ChevronRight, Download, ClipboardPaste, Zap, X, Info } from 'lucide-react';
 import mammoth from 'mammoth';
@@ -272,7 +273,7 @@ const WordImportWizard: React.FC<{ onComplete: () => void }> = ({ onComplete }) 
   const saveToDatabase = async () => {
     setIsProcessing(true);
     try {
-      const response = await fetch('http://localhost:3001/api/import-questions', {
+      const response = await fetch(`${API_BASE_URL}/api/import-questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ moduleName: targetModule, topicName: targetTopic, questions: questions })

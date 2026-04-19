@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   Users, 
@@ -39,9 +40,9 @@ const AttendanceManager: React.FC = () => {
         setIsLoadingInitial(true);
         try {
             const [eRes, gRes, sRes] = await Promise.all([
-                fetch('http://localhost:3001/api/exams'),
-                fetch('http://localhost:3001/api/groups'),
-                fetch('http://localhost:3001/api/settings')
+                fetch(`${API_BASE_URL}/api/exams`),
+                fetch(`${API_BASE_URL}/api/groups`),
+                fetch(`${API_BASE_URL}/api/settings`)
             ]);
             setExams(await eRes.json());
             setGroups(await gRes.json());
@@ -67,7 +68,7 @@ const AttendanceManager: React.FC = () => {
         try {
             const params = new URLSearchParams();
             if (selectedGroup) params.append('groupId', selectedGroup);
-            const res = await fetch(`http://localhost:3001/api/exams/${selectedExam}/attendance?${params.toString()}`);
+            const res = await fetch(`${API_BASE_URL}/api/exams/${selectedExam}/attendance?${params.toString()}`);
             const data = await res.json();
             if (data.error) setError(data.error);
             else {
@@ -85,7 +86,7 @@ const AttendanceManager: React.FC = () => {
             const params = new URLSearchParams();
             params.append('examIds', selectedExams.join(','));
             if (selectedGroup) params.append('groupId', selectedGroup);
-            const res = await fetch(`http://localhost:3001/api/attendance/recap?${params.toString()}`);
+            const res = await fetch(`${API_BASE_URL}/api/attendance/recap?${params.toString()}`);
             const data = await res.json();
             if (data.error) setError(data.error);
             else {

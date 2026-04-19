@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   Search, 
@@ -43,9 +44,9 @@ const UserResultSelector: React.FC = () => {
             setIsLoadingInitial(true);
             try {
                 const [eRes, gRes, sRes] = await Promise.all([
-                    fetch('http://localhost:3001/api/exams'),
-                    fetch('http://localhost:3001/api/groups'),
-                    fetch('http://localhost:3001/api/settings')
+                    fetch(`${API_BASE_URL}/api/exams`),
+                    fetch(`${API_BASE_URL}/api/groups`),
+                    fetch(`${API_BASE_URL}/api/settings`)
                 ]);
                 setExams(await eRes.json());
                 setGroups(await gRes.json());
@@ -78,7 +79,7 @@ const UserResultSelector: React.FC = () => {
                 params.append('examId', selectedExam);
                 if (selectedGroup) params.append('groupId', selectedGroup);
                 
-                const res = await fetch(`http://localhost:3001/api/results?${params.toString()}`);
+                const res = await fetch(`${API_BASE_URL}/api/results?${params.toString()}`);
                 const data = await res.json();
                 setStudents(data);
                 if (!data.find((s: any) => s.id === parseInt(selectedResultId))) {
@@ -106,7 +107,7 @@ const UserResultSelector: React.FC = () => {
             setIsFetchingDetail(true);
             setError(null);
             try {
-                const res = await fetch(`http://localhost:3001/api/results/${selectedResultId}/review`);
+                const res = await fetch(`${API_BASE_URL}/api/results/${selectedResultId}/review`);
                 const data = await res.json();
                 if (data.info) {
                     setStudentInfo(data.info);

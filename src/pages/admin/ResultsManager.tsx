@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -54,9 +55,9 @@ const ResultsManager: React.FC = () => {
   const fetchInitialData = async () => {
     try {
       const [eRes, gRes, sRes] = await Promise.all([
-        fetch('http://localhost:3001/api/exams'),
-        fetch('http://localhost:3001/api/groups'),
-        fetch('http://localhost:3001/api/settings')
+        fetch(`${API_BASE_URL}/api/exams`),
+        fetch(`${API_BASE_URL}/api/groups`),
+        fetch(`${API_BASE_URL}/api/settings`)
       ]);
       setExams(await eRes.json());
       setGroups(await gRes.json());
@@ -85,7 +86,7 @@ const ResultsManager: React.FC = () => {
       if (dateStart) params.append('dateStart', dateStart);
       if (dateEnd) params.append('dateEnd', dateEnd);
 
-      const res = await fetch(`http://localhost:3001/api/results?${params.toString()}`);
+      const res = await fetch(`${API_BASE_URL}/api/results?${params.toString()}`);
       let data = await res.json();
       
       // Secondary filter in frontend for combined criteria (School + Class)
@@ -124,7 +125,7 @@ const ResultsManager: React.FC = () => {
 
     try {
       await Promise.all(selectedIds.map(id => 
-        fetch(`http://localhost:3001/api/results/${id}`, { method: 'DELETE' })
+        fetch(`${API_BASE_URL}/api/results/${id}`, { method: 'DELETE' })
       ));
       toast.success('Data hasil ujian berhasil dihapus');
       handleFilter();
@@ -136,7 +137,7 @@ const ResultsManager: React.FC = () => {
   const handleRegrade = async (id: number) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/results/${id}/regrade`, { method: 'POST' });
+      const res = await fetch(`${API_BASE_URL}/api/results/${id}/regrade`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
           toast.success("Skor berhasil dikalkulasi ulang: " + data.newScore);
@@ -157,7 +158,7 @@ const ResultsManager: React.FC = () => {
     try {
       let count = 0;
       for (const id of selectedIds) {
-        const res = await fetch(`http://localhost:3001/api/results/${id}/action`, { 
+        const res = await fetch(`${API_BASE_URL}/api/results/${id}/action`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action })
@@ -610,7 +611,7 @@ const ResultsManager: React.FC = () => {
                        try {
                            let count = 0;
                            for (const id of selectedIds) {
-                               const res = await fetch(`http://localhost:3001/api/results/${id}/regrade`, { method: 'POST' });
+                               const res = await fetch(`${API_BASE_URL}/api/results/${id}/regrade`, { method: 'POST' });
                                if (res.ok) count++;
                            }
                            toast.success(`${count} data berhasil dikalkulasi ulang`);
